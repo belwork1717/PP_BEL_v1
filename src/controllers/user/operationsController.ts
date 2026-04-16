@@ -1,0 +1,109 @@
+import {
+  fetchSubdepartmentBatchesApi,
+  fetchMaterialsListApi,
+  fetchMaterialSpecificationListApi,
+  fetchDimensionalParametersListApi,
+  fetchSolidProcessesListApi,
+} from "../../data/api/users/operationsApi";
+import { ApiResponseModel } from "../../data/models/common/ApiResponseModel";
+import { MaterialSpecificationListModel } from "../../data/models/user/MaterialSpecificationModel";
+import {
+  DimensionalParametersListModel,
+  SolidProcessesListModel,
+} from "../../data/models/user/SubdepartmentCommonModel";
+
+export type BatchListPayload = {
+  subDepartmentId: number;
+  userId: string;
+  page: number;
+  limit: number;
+  status?: string[];
+  priority?: string[];
+  search?: string;
+};
+
+export type MaterialSpecificationPayload = {
+  materialCode: string;
+};
+
+export type DimensionalParametersPayload = {
+  motorType: string;
+};
+
+export type SolidProcessesPayload = {
+  materialType: string;
+};
+
+export const operationsController = {
+  /**
+   * Common API to fetch paginated batches dynamically based on subDepartmentId.
+   */
+  fetchSubdepartmentBatches: async (payload: BatchListPayload) => {
+    try {
+      const response = await fetchSubdepartmentBatchesApi(payload);
+      return new ApiResponseModel(response);
+    } catch (error) {
+      console.error("Failed to fetch subdepartment batches:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /**
+   * Common API to fetch materials list for Sourcing.
+   */
+  fetchMaterialsList: async () => {
+    try {
+      const response = await fetchMaterialsListApi();
+      return new ApiResponseModel(response);
+    } catch (error) {
+      console.error("Failed to fetch materials list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /**
+   * Common API to fetch specification list for a material.
+   */
+  fetchMaterialSpecificationList: async (payload: MaterialSpecificationPayload) => {
+    try {
+      const response = await fetchMaterialSpecificationListApi(payload);
+      return new ApiResponseModel<MaterialSpecificationListModel>(response, (res) =>
+        MaterialSpecificationListModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch material specification list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /**
+   * Common API to fetch dimensional parameters for a motor type.
+   */
+  fetchDimensionalParametersList: async (payload: DimensionalParametersPayload) => {
+    try {
+      const response = await fetchDimensionalParametersListApi(payload);
+      return new ApiResponseModel<DimensionalParametersListModel>(response, (res) =>
+        DimensionalParametersListModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch dimensional parameters:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /**
+   * Common API to fetch processes list for material type.
+   */
+  fetchSolidProcessesList: async (payload: SolidProcessesPayload) => {
+    try {
+      const response = await fetchSolidProcessesListApi(payload);
+      return new ApiResponseModel<SolidProcessesListModel>(response, (res) =>
+        SolidProcessesListModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch solid processes list:", error);
+      return new ApiResponseModel(error);
+    }
+  }
+};
+

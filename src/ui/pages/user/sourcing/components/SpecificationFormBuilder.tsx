@@ -1,0 +1,229 @@
+import {
+  Box,
+  Button,
+  Chip,
+  InputAdornment,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { icons } from "../../../../../app/theme/icons";
+
+import ConfirmAlertDialog from "../../../../components/common/ConfirmAlertDialog";
+import StackRow from "../../../../components/common/StackRow";
+import UserWorkflowActionBar from "../../../../components/custom/UserWorkflowActionBar";
+import MaterialSpecificationBlock from "./MaterialSpecificationBlock";
+import useSpecificationFormBuilderHook, {
+  SpecificationBlock,
+} from "../../../../../hooks/user/sourcing/useSpecificationFormBuilderHook";
+
+const {
+  add: AddRoundedIcon,
+  science: ScienceRoundedIcon,
+  info: InfoOutlinedIcon,
+  expandMore: ExpandMoreRoundedIcon,
+  warning: WarningAmberRoundedIcon,
+} = icons.user.sourcing.specificationFormBuilder;
+
+type SpecificationFormBuilderProps = {
+  initialBlocks?: SpecificationBlock[];
+  isEditMode?: boolean;
+  onSaveDraft?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
+  onSubmit?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
+  onBlocksChange?: (blocks: SpecificationBlock[]) => void;
+  actionLoading?: boolean;
+  pdfMeta?: unknown;
+};
+
+const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
+  const {
+    actionHelperText,
+    addingMaterial,
+    availableMaterials,
+    blocks,
+    canSubmit,
+    closeDraftConfirm,
+    closeSubmitConfirm,
+    disableActionBar,
+    draftConfirm,
+    filledRows,
+    formStrings,
+    handleAdd,
+    handleConfirmDraft,
+    handleConfirmSubmit,
+    handleRemoveBlock,
+    handleUpdateBlock,
+    hasBlocks,
+    isEditMode,
+    isMaterialLoading,
+    loadingMaterials,
+    openDraftConfirm,
+    openSubmitConfirm,
+    selectedMaterial,
+    setSelectedMaterial,
+    specStyles,
+    submitConfirm,
+    theme,
+    totalRows,
+  } = useSpecificationFormBuilderHook(props);
+
+  return (
+    <Box>
+      {isEditMode && (
+        <Box sx={specStyles.editModeBanner}>
+          <WarningAmberRoundedIcon sx={{ ...specStyles.editModeIcon, color: theme.palette.danger }} />
+          <Typography sx={specStyles.editModeBannerText}>{formStrings.EDIT_MODE_BANNER}</Typography>
+        </Box>
+      )}
+
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" mb={2.5} flexWrap="wrap" gap={1.5}>
+        <Stack direction="row" alignItems="center" gap={1.5}>
+          <Box sx={specStyles.headerIconBadge}>
+            <ScienceRoundedIcon sx={{ ...specStyles.whiteIcon, ...specStyles.headerScienceIcon }} />
+          </Box>
+          <Box>
+            <Typography sx={specStyles.headerTitle}>{formStrings.TITLE}</Typography>
+            <Typography sx={specStyles.headerSubtitle}>{formStrings.SUBTITLE}</Typography>
+          </Box>
+        </Stack>
+      </Stack>
+
+      {hasBlocks && (
+        <Stack direction="row" gap={1.5} mb={2.5} flexWrap="wrap">
+          <Chip
+            label={`${blocks.length} ${blocks.length > 1 ? formStrings.BLOCK_SUFFIX_PLURAL : formStrings.BLOCK_SUFFIX}`}
+            size="small"
+            sx={specStyles.summaryPrimaryChip}
+          />
+          <Chip
+            label={`${filledRows} / ${totalRows} ${formStrings.RESULTS_FILLED_SUFFIX}`}
+            size="small"
+            sx={specStyles.resultSummaryChip(filledRows === totalRows && totalRows > 0)}
+          />
+        </Stack>
+      )}
+
+      <Box sx={specStyles.materialSelectorBox}>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={2} alignItems="flex-end">
+          <Box flex={1}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.SELECT_MATERIAL_LABEL}</Typography>
+            <TextField
+              fullWidth
+              select
+              size="small"
+              value={selectedMaterial}
+              onChange={(event) => setSelectedMaterial(event.target.value)}
+              sx={theme.workflow.formElements.textField}
+              SelectProps={{ displayEmpty: true, IconComponent: ExpandMoreRoundedIcon }}
+              disabled={loadingMaterials}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <ScienceRoundedIcon sx={{ fontSize: 16, color: selectedMaterial ? theme.palette.primaryLight : theme.palette.border }} />
+                  </InputAdornment>
+                ),
+              }}
+            >
+              <MenuItem value="" disabled>
+                <Typography color="text.disabled" fontSize="0.85rem">
+                  {loadingMaterials ? formStrings.LOADING_MATERIALS : formStrings.SELECT_MATERIAL_PLACEHOLDER}
+                </Typography>
+              </MenuItem>
+              {availableMaterials.map((material) => (
+                <MenuItem key={material.materialCode} value={material.materialCode} sx={{ ...specStyles.materialOption, color: theme.palette.text }}>
+                  {material.materialCode} - {material.materialName}
+                  <Typography component="span" sx={specStyles.materialOptionMeta}>
+                    ({material.specCount} {formStrings.SPEC_COUNT_SUFFIX})
+                  </Typography>
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+
+          <Button
+            variant="contained"
+            onClick={handleAdd}
+            disabled={!selectedMaterial || addingMaterial || isMaterialLoading(selectedMaterial)}
+            startIcon={<AddRoundedIcon />}
+            sx={specStyles.addButton}
+          >
+            {addingMaterial || isMaterialLoading(selectedMaterial) ? formStrings.ADDING_TO_FORM : formStrings.ADD_TO_FORM}
+          </Button>
+        </Stack>
+      </Box>
+
+      <Stack spacing={2.5}>
+        {!hasBlocks && (
+          <Box sx={theme.workflow.formElements.emptyStateBox}>
+            <ScienceRoundedIcon sx={specStyles.emptyStateIcon} />
+            <Typography sx={specStyles.emptyStateTitle}>{formStrings.EMPTY_ADDED_TITLE}</Typography>
+            <Typography sx={specStyles.emptyStateSubtitle}>{formStrings.EMPTY_ADDED_SUBTITLE}</Typography>
+          </Box>
+        )}
+
+        {blocks.map((block, idx) => (
+          <MaterialSpecificationBlock
+            key={`${block.material}-${idx}`}
+            block={block}
+            index={idx}
+            onUpdate={handleUpdateBlock}
+            onRemove={handleRemoveBlock}
+            theme={theme}
+          />
+        ))}
+      </Stack>
+
+      {hasBlocks && (
+        <StackRow gap={1} sx={{ ...theme.workflow.formElements.infoFooterNote, ...specStyles.footerInfoContainer }}>
+          <InfoOutlinedIcon sx={specStyles.footerInfoIcon} />
+          <Typography sx={specStyles.footerInfoText}>{formStrings.READY_SUBTITLE}</Typography>
+        </StackRow>
+      )}
+
+      <UserWorkflowActionBar
+        isEdit={isEditMode}
+        canSubmit={canSubmit}
+        readinessText={formStrings.READY_TITLE}
+        pendingText={hasBlocks ? formStrings.SUBMIT_DISABLED_TOOLTIP : formStrings.NOT_READY_TITLE}
+        helperText={actionHelperText}
+        onSaveDraft={openDraftConfirm}
+        onSubmitClick={openSubmitConfirm}
+        theme={theme}
+        saveLabel={formStrings.SAVE_DRAFT}
+        submitLabel={formStrings.SUBMIT_APPROVAL}
+        resubmitLabel={formStrings.RESUBMIT_APPROVAL}
+        saveTooltip={hasBlocks ? formStrings.SAVE_CONTINUE : formStrings.SAVE_DISABLED_TOOLTIP}
+        disableActions={disableActionBar}
+      />
+
+      <ConfirmAlertDialog
+        open={draftConfirm}
+        severity="info"
+        title={formStrings.CONFIRM_DRAFT_TITLE}
+        message={formStrings.CONFIRM_DRAFT_MESSAGE}
+        confirmLabel={formStrings.CONFIRM_DRAFT_ACTION}
+        cancelLabel={formStrings.CONFIRM_DRAFT_CANCEL_ACTION}
+        onConfirm={handleConfirmDraft}
+        onCancel={closeDraftConfirm}
+      />
+
+      <ConfirmAlertDialog
+        open={submitConfirm}
+        severity="warning"
+        title={isEditMode ? formStrings.CONFIRM_RESUBMIT_TITLE : formStrings.CONFIRM_SUBMIT_TITLE}
+        message={
+          isEditMode
+            ? formStrings.CONFIRM_RESUBMIT_MESSAGE
+            : formStrings.CONFIRM_SUBMIT_MESSAGE
+        }
+        confirmLabel={isEditMode ? formStrings.CONFIRM_RESUBMIT_ACTION : formStrings.CONFIRM_SUBMIT_ACTION}
+        cancelLabel={formStrings.CONFIRM_CANCEL_ACTION}
+        onConfirm={handleConfirmSubmit}
+        onCancel={closeSubmitConfirm}
+      />
+    </Box>
+  );
+};
+
+export default SpecificationFormBuilder;

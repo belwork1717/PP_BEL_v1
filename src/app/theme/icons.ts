@@ -180,6 +180,7 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WaterRoundedIcon from "@mui/icons-material/WaterRounded";
+import Project from "@mui/icons-material/AccountTreeRounded";
 
 
 export const icons = {
@@ -253,9 +254,7 @@ export const icons = {
   drawerDashboard:   DashboardIcon,
   drawerUsers:       PeopleIcon,
   drawerBatch:       BatchPredictionIcon,
-  drawerDepartments: ApartmentIcon,
-  drawerReports:     AssessmentIcon,
-  drawerSettings:    SettingsIcon,
+  drawerDepartments: Project,
   drawerLogout:      LogoutIcon,
 
   // Dashboard

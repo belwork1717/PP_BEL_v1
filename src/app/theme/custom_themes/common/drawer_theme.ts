@@ -11,12 +11,10 @@ import { icons } from "../../icons";
 // then reference them here via icons.drawerXxx
 // ─────────────────────────────────────────────────────────────────────────────
 export const DRAWER_NAV = [
-  { key: "dashboard",   label: "Dashboard",        Icon: icons.drawerDashboard   },
-  { key: "users",       label: "User Management",  Icon: icons.drawerUsers       },
-  { key: "batch",       label: "Batch Management", Icon: icons.drawerBatch       },
-  { key: "departments", label: "Departments",      Icon: icons.drawerDepartments },
-  { key: "reports",     label: "Reports",          Icon: icons.drawerReports     },
-  { key: "settings",    label: "Settings",         Icon: icons.drawerSettings    },
+  { key: "dashboard",   label: "Dashboard",         path: "/admin",          Icon: icons.drawerDashboard   },
+  { key: "users",       label: "User Management",   path: "/admin/users",    Icon: icons.drawerUsers       },
+  { key: "batch",       label: "Batch Management",  path: "/admin/batch",    Icon: icons.drawerBatch       },
+  { key: "projects",    label: "Project Management",path: "/admin/projects", Icon: icons.drawerDepartments },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

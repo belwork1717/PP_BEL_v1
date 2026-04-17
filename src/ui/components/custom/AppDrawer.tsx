@@ -4,7 +4,7 @@ import {
 } from "@mui/material";
 import { useThemeStore }    from "../../../app/store/themeStore";
 import { useAuthStore }     from "../../../app/store/authStore";
-import { useAdminNavStore } from "../../../app/store/adminNavStore";  // ← nav store
+import { useLocation, useNavigate } from "react-router-dom";
 import { STRINGS }          from "../../../app/config/strings";
 import { icons }            from "../../../app/theme/icons";
 import getDrawerTheme, {
@@ -51,19 +51,19 @@ const AdminDrawer = ({ open, onClose, onLogout }) => {
   const username   = user?.username ?? "User";
   const userId     = user?.userId ?? "--";
 
-  // ── Read active view + setter from store ──────────────────────────────────
-  const activeView = useAdminNavStore((s) => s.activeView);
-  const setView    = useAdminNavStore((s) => s.setView);
-
+  // ── Determine active route from location and navigate on click ───────────
+  const navigate   = useNavigate();
+  const location   = useLocation();
   const t          = getDrawerTheme(mode);
   const LogoutIcon = icons.drawerLogout;
   const RoleIcon   = ROLE_ICON_MAP[roleName] ?? icons.headerUser;
   const UserIdIcon = icons.userMgmt.userId;
   const displayRole = formatRoleLabel(roleName || "member");
 
-  const handleNavClick = (key) => {
-    setView(key);   // ← updates store; AdminDashboard re-renders automatically
+  const activeView = DRAWER_NAV.find((item) => item.path === location.pathname)?.key ?? "";
+  const handleNavClick = (path) => {
     onClose?.();
+    if (path) navigate(path);
   };
 
   return (
@@ -91,14 +91,14 @@ const AdminDrawer = ({ open, onClose, onLogout }) => {
 
       {/* ── Nav items ── */}
       <List sx={t.nav.list}>
-        {DRAWER_NAV.map(({ key, label, Icon }) => {
+        {DRAWER_NAV.map(({ key, label, Icon, path }) => {
           const isActive = activeView === key;
           return (
             <ListItem key={key} disablePadding>
               <ListItemButton
                 selected={isActive}
                 sx={t.nav.item}
-                onClick={() => handleNavClick(key)}
+                onClick={() => handleNavClick(path)}
               >
                 <ListItemIcon sx={t.nav.icon}>
                   <Icon fontSize="small" />

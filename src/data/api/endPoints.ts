@@ -21,6 +21,7 @@ export const APPROVER_ENDPOINTS = {
 };
 
 export const ADMIN_ENDPOINTS = {
+  BASE: `${API_BASE}/admin`,
   BATCH_LIST: `${API_BASE}/batches/all`,
   CREATE_BATCH: (username) => `${API_BASE}/batches/create?user=${username}`,
   DASHBOARD_ENDPOINTS: {
@@ -28,7 +29,15 @@ export const ADMIN_ENDPOINTS = {
     GET_CHART_DATA: `${API_BASE}/admin/dashboard/chartData`,
     GET_ACTIVE_BATCHES: `${API_BASE}/admin/dashboard/active-batches`,
     GET_BLOCKCHAIN_EVENTS: `${API_BASE}/admin/dashboard/blockchain-events`,
-  }
+  },
+  PROJECT: {
+    LIST: `${API_BASE}/admin/project/list`,
+    STATS: `${API_BASE}/admin/project/stats`,
+    DETAILS: `${API_BASE}/admin/project/details`,
+    CREATE: `${API_BASE}/admin/project/create`,
+    UPDATE: `${API_BASE}/admin/project/update`,
+    DELETE: `${API_BASE}/admin/project/delete`,
+  },
 };
 
 export const USER_SOURCING_ENDPOINTS = {

@@ -3,6 +3,9 @@ import { Navigate } from "react-router-dom";
 import LoginPage from "../../ui/pages/auth/LoginPage";
 
 import AdminDashboard from "../../ui/pages/admin/AdminDashboard";
+import UserManagementPage from "../../ui/pages/admin/components/user_management/UserManagementPage";
+import BatchManagementPage from "../../ui/pages/admin/components/batch_management/BatchManagementPage";
+import ProjectManagementPage from "../../ui/pages/admin/project_management/ProjectManagementPage";
 import SystemManagerDashboard from "../../ui/pages/systemManager/SystemManagerDashboard";
 import SourcingDashboard from "../../ui/pages/user/sourcing/SourcingDashboard";
 import ManufacturingDashboard from "../../ui/pages/user/manufacturing/ManufacturingDashboard";
@@ -30,6 +33,24 @@ export const routes = [
   {
     path: "/admin",
     element: <AdminDashboard />,
+    isProtected: true,
+    roles: ["ADMIN"],
+  },
+  {
+    path: "/admin/users",
+    element: <UserManagementPage />,
+    isProtected: true,
+    roles: ["ADMIN"],
+  },
+  {
+    path: "/admin/batch",
+    element: <BatchManagementPage />,
+    isProtected: true,
+    roles: ["ADMIN"],
+  },
+  {
+    path: "/admin/projects",
+    element: <ProjectManagementPage />,
     isProtected: true,
     roles: ["ADMIN"],
   },

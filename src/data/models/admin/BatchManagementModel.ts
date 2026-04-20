@@ -12,44 +12,55 @@ import { icons } from "../../../app/theme";
 
    API shape:
    {
-     id, batchId, motorId,
+     id, batchId, batchType, subBatchType,
+     projectId, numberOfMotors, motorIds: [],
      motorType: { motorTypeId, motorTypeName },
-     projectName, batchType, priority,
-     systemManager: { id, name },
-    stage: { department: { departmentId, departmentName, subDepartments: [{ subDepartmentId, subDepartmentName }] } },
+     priority, systemManagerId,
      status, createdOn, createdBy: { id, name },
-     updatedOn?, updatedBy?: { id, name }          ← detail endpoint only
+     updatedOn?, updatedBy?: { id, name },
+     identificationSheet?: {...},
+     objective?, articles?: []
    }
 ───────────────────────────────────────────────────────────────────────────── */
 export class BatchListItemModel {
-  id           : string | null;
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number | null; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string } | null;
+  id                  : string | null;
+  batchId             : string;
+  batchType           : string;
+  subBatchType        : string | null;
+  projectId           : string | null;
+  numberOfMotors      : number;
+  motorIds            : string[];
+  motorType           : { motorTypeId: number | null; motorTypeName: string };
+  priority            : string;
+  systemManagerId     : string;
 
   // Flattened stage / department fields for easy table access
-  department   : { departmentId: number | null; departmentName: string } | null;
-  subDepartments: { subDepartmentId: number; subDepartmentName: string }[];
+  department          : { departmentId: number | null; departmentName: string } | null;
+  subDepartments      : { subDepartmentId: number; subDepartmentName: string }[];
 
-  status    : string;
-  createdOn : string | null;
-  createdBy : { id: string; name: string } | null;
-  updatedOn : string | null;
-  updatedBy : { id: string; name: string } | null;
+  status              : string;
+  createdOn           : string | null;
+  createdBy           : { id: string; name: string } | null;
+  updatedOn           : string | null;
+  updatedBy           : { id: string; name: string } | null;
+  
+  // Implementation details (optional)
+  identificationSheet : IdentificationSheet | null;
+  objective           : string | null;
+  articles            : string[];
 
   constructor(data: Record<string, any>) {
-    this.id          = data.id          ?? null;
-    this.batchId     = data.batchId     ?? "";
-    this.motorId     = data.motorId     ?? "";
-    this.projectName = data.projectName ?? "";
-    this.batchType   = data.batchType   ?? "";
-    this.priority    = data.priority    ?? "Medium";
-    this.status      = data.status      ?? "Pending";
-
+    this.id              = data.id              ?? null;
+    this.batchId         = data.batchId         ?? "";
+    this.batchType       = data.batchType       ?? "MAIN";
+    this.subBatchType    = data.subBatchType    ?? null;
+    this.projectId       = data.projectId       ?? null;
+    this.numberOfMotors  = data.numberOfMotors  ?? 0;
+    this.motorIds        = Array.isArray(data.motorIds) ? data.motorIds : [];
+    this.priority        = data.priority        ?? "Medium";
+    this.systemManagerId = data.systemManagerId ?? "";
+    this.status          = data.status          ?? "Initiated";
+    
     // motorType — object in API, defensive fallback for missing data
     this.motorType = data.motorType
       ? {
@@ -57,11 +68,6 @@ export class BatchListItemModel {
           motorTypeName: data.motorType.motorTypeName ?? "",
         }
       : { motorTypeId: null, motorTypeName: "" };
-
-    // systemManager
-    this.systemManager = data.systemManager
-      ? { id: data.systemManager.id ?? "", name: data.systemManager.name ?? "" }
-      : null;
 
     // stage → department (nested in API response)
     const dept = data.stage?.department ?? null;
@@ -94,6 +100,11 @@ export class BatchListItemModel {
     this.updatedBy = data.updatedBy
       ? { id: data.updatedBy.id ?? "", name: data.updatedBy.name ?? "" }
       : null;
+
+    // Implementation details (optional)
+    this.identificationSheet = data.identificationSheet ?? null;
+    this.objective           = data.objective ?? null;
+    this.articles            = Array.isArray(data.articles) ? data.articles : [];
   }
 
   static fromApi(data: Record<string, any>) {
@@ -102,79 +113,118 @@ export class BatchListItemModel {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   IDENTIFICATION SHEET MODELS
+───────────────────────────────────────────────────────────────────────────── */
+
+export interface MaterialItem {
+  srNo                : number;
+  materialCode        : string;
+  lotId               : string;
+  make                : string;
+  requiredComposition : number;
+  quantityPerPremix   : number;
+  revalidationDate    : string;
+}
+
+export interface IdentificationSheet {
+  date              : string;
+  batchSize         : number;
+  bondingSheetNo    : string;
+  mixerDetails      : string;
+  numberOfPremix    : number;
+  remarks?          : string;
+  materials         : MaterialItem[];
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    WRITE MODELS — CreateBatchPayload / UpdateBatchPayload
-   Both share the same request body shape per the API contracts.
-   createdBy / updatedBy are derived server-side from the auth token,
-   so they are NOT included in the outgoing payload.
+   Updated to support the new two-step batch creation workflow.
+   Step 1: Create batch with basic details (identificationSheet is optional)
+   Step 2: Update batch with implementation details (identificationSheet)
 ───────────────────────────────────────────────────────────────────────────── */
 
 export interface BatchWritePayload {
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string };
+  batchType           : string;
+  subBatchType?       : string;
+  projectId?          : string;
+  motorType           : { motorTypeId: number; motorTypeName: string };
+  numberOfMotors      : number;
+  motorIds            : string[];
+  priority            : string;
+  systemManagerId     : string;
+  identificationSheet?: IdentificationSheet;
+  objective?          : string;
+  articles?           : string[];
 }
 
 /**
- * Write model — used when POSTing a new batch.
+ * Write model — used when POSTing a new batch (Step 1).
+ * identificationSheet is optional in create API.
  * Controller builds this from raw form values.
  */
 export class CreateBatchPayload implements BatchWritePayload {
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string };
+  batchType           : string;
+  subBatchType?       : string;
+  projectId?          : string;
+  motorType           : { motorTypeId: number; motorTypeName: string };
+  numberOfMotors      : number;
+  motorIds            : string[];
+  priority            : string;
+  systemManagerId     : string;
+  identificationSheet?: IdentificationSheet;
+  objective?          : string;
+  articles?           : string[];
 
   constructor(form: Record<string, any>) {
-    this.batchId       = String(form.batchId      ?? "").trim();
-    this.motorId       = String(form.motorId       ?? "").trim();
-    this.motorType     = {
+    this.batchType         = form.batchType           ?? "MAIN";
+    this.subBatchType      = form.subBatchType        ?? undefined;
+    this.projectId         = form.projectId           ?? undefined;
+    this.motorType         = {
       motorTypeId  : form.motorType?.motorTypeId   ?? 0,
       motorTypeName: form.motorType?.motorTypeName ?? "",
     };
-    this.projectName   = String(form.projectName  ?? "").trim();
-    this.batchType     = form.batchType            ?? "";
-    this.priority      = form.priority             ?? "Medium";
-    this.systemManager = {
-      id  : form.systemManager?.id   ?? "",
-      name: form.systemManager?.name ?? "",
-    };
+    this.numberOfMotors    = form.numberOfMotors      ?? 0;
+    this.motorIds          = Array.isArray(form.motorIds) ? form.motorIds : (form.motorIds ? [form.motorIds] : []);
+    this.priority          = form.priority            ?? "Medium";
+    this.systemManagerId   = String(form.systemManagerId ?? "").trim();
+    this.identificationSheet = form.identificationSheet ?? undefined;
+    this.objective         = form.objective           ?? undefined;
+    this.articles          = Array.isArray(form.articles) ? form.articles : undefined;
   }
 }
 
 /**
- * Write model — used when PUTting an updated batch.
- * Identical fields to CreateBatchPayload (same API contract shape).
+ * Write model — used when PUTting an updated batch (Step 2 - Implementation Details).
+ * Used to update the batch with identificationSheet and other implementation details.
  */
 export class UpdateBatchPayload implements BatchWritePayload {
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string };
+  batchType           : string;
+  subBatchType?       : string;
+  projectId?          : string;
+  motorType           : { motorTypeId: number; motorTypeName: string };
+  numberOfMotors      : number;
+  motorIds            : string[];
+  priority            : string;
+  systemManagerId     : string;
+  identificationSheet?: IdentificationSheet;
+  objective?          : string;
+  articles?           : string[];
 
   constructor(form: Record<string, any>) {
-    this.batchId       = String(form.batchId      ?? "").trim();
-    this.motorId       = String(form.motorId       ?? "").trim();
-    this.motorType     = {
+    this.batchType         = form.batchType           ?? "MAIN";
+    this.subBatchType      = form.subBatchType        ?? undefined;
+    this.projectId         = form.projectId           ?? undefined;
+    this.motorType         = {
       motorTypeId  : form.motorType?.motorTypeId   ?? 0,
       motorTypeName: form.motorType?.motorTypeName ?? "",
     };
-    this.projectName   = String(form.projectName  ?? "").trim();
-    this.batchType     = form.batchType            ?? "";
-    this.priority      = form.priority             ?? "Medium";
-    this.systemManager = {
-      id  : form.systemManager?.id   ?? "",
-      name: form.systemManager?.name ?? "",
-    };
+    this.numberOfMotors    = form.numberOfMotors      ?? 0;
+    this.motorIds          = Array.isArray(form.motorIds) ? form.motorIds : (form.motorIds ? [form.motorIds] : []);
+    this.priority          = form.priority            ?? "Medium";
+    this.systemManagerId   = String(form.systemManagerId ?? "").trim();
+    this.identificationSheet = form.identificationSheet ?? undefined;
+    this.objective         = form.objective           ?? undefined;
+    this.articles          = Array.isArray(form.articles) ? form.articles : undefined;
   }
 }
 

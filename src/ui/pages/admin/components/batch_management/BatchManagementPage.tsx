@@ -11,6 +11,7 @@ import Input        from "../../../../components/common/Input";
 import FilterSelect from "../../../../components/common/FilterSelect";
 import BatchListTable    from "./components/BatchListTable";
 import BatchFormModal    from "./components/BatchFormModal";
+import BatchImplementationModal from "./components/BatchImplementationModal";
 import DeleteBatchDialog from "./components/DeleteBatchDialog";
 
 import { useBatchList }    from "../../../../../hooks/admin/batch_management/useBatchListHook";
@@ -195,6 +196,7 @@ const BatchManagementPage = ({ mode = "light" }: any) => {
         rowsPerPage={listParams.rowsPerPage}
         onEdit={actions.openEdit}
         onDelete={actions.openDelete}
+        onCompleteImplementation={actions.openCompleteImplementation}
         onPageChange={(_: any, p: number) => listParams.setPage(p)}
         onRowsPerPageChange={(e: any) => { listParams.setRowsPerPage(+e.target.value); listParams.setPage(0); }}
       />
@@ -203,12 +205,26 @@ const BatchManagementPage = ({ mode = "light" }: any) => {
       <BatchFormModal
         open={actions.modalOpen}
         onClose={() => actions.setModalOpen(false)}
-        onSave={actions.handleSave}
+        onSave={actions.handleSaveBatch}
+        onOpenImplementation={actions.openImplementationFromCreate}
         editTarget={actions.editTarget}
-        form={actions.form}
-        onFormChange={actions.handleFormChange}
+        form={actions.batchForm}
+        onFormChange={actions.handleBatchFormChange}
+        onMotorIdsChange={actions.handleMotorIdsChange}
         userOptions={lookups.userOptions}
         saving={actions.saving}
+        t={t}
+      />
+
+      <BatchImplementationModal
+        open={actions.implModalOpen}
+        onClose={() => actions.setImplModalOpen(false)}
+        onSave={actions.handleSaveImplementation}
+        editTarget={actions.editImplTarget}
+        form={actions.implForm}
+        onFormChange={actions.handleImplFormChange}
+        onMaterialsChange={actions.handleMaterialsChange}
+        saving={actions.implSaving}
         t={t}
       />
 

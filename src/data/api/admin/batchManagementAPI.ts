@@ -83,50 +83,60 @@ export const fetchBatchById = (batchId: string) =>
   post(BATCH_MANAGEMENT.GET_BATCH_BY_ID, { batchId });
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   CREATE BATCH
-   POST  →  { batchId, motorId, motorType, projectName, batchType,
-              priority, systemManager }
+   CREATE BATCH (Step 1: Basic Details)
+   POST → Two-step workflow:
+   Step 1: Create batch with basic details (batchType, projectId, motorType, etc.)
+           identificationSheet is OPTIONAL in create
+   Step 2: Update batch with implementation details via updateBatch endpoint
 ───────────────────────────────────────────────────────────────────────────── */
 
-export interface CreateBatchPayload {
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string };
+export interface CreateBatchPayloadAPI {
+  batchType           : string;
+  subBatchType?       : string;
+  projectId?          : string;
+  motorType           : { motorTypeId: number; motorTypeName: string };
+  numberOfMotors      : number;
+  motorIds            : string[];
+  priority            : string;
+  systemManagerId     : string;
+  identificationSheet?: any;
+  objective?          : string;
+  articles?           : string[];
 }
 
 /**
- * Create a new batch.
+ * Create a new batch (Step 1).
  * @param payload - Batch creation fields
  */
-export const createBatch = (payload: CreateBatchPayload) =>
+export const createBatch = (payload: CreateBatchPayloadAPI) =>
   post(BATCH_MANAGEMENT.CREATE_BATCH, payload);
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   UPDATE BATCH
-   PUT  →  { batchId, motorId, motorType, projectName, batchType,
-             priority, systemManager }
+   UPDATE BATCH (Step 2: Implementation Details)
+   PUT  →  Used to update batch with implementation details (identificationSheet)
+           Can also update other fields like priority, systemManagerId if needed
 ───────────────────────────────────────────────────────────────────────────── */
 
-export interface UpdateBatchPayload {
-  batchId      : string;
-  motorId      : string;
-  motorType    : { motorTypeId: number; motorTypeName: string };
-  projectName  : string;
-  batchType    : string;
-  priority     : string;
-  systemManager: { id: string; name: string };
+export interface UpdateBatchPayloadAPI {
+  batchType           : string;
+  subBatchType?       : string;
+  projectId?          : string;
+  motorType           : { motorTypeId: number; motorTypeName: string };
+  numberOfMotors      : number;
+  motorIds            : string[];
+  priority            : string;
+  systemManagerId     : string;
+  identificationSheet?: any;
+  objective?          : string;
+  articles?           : string[];
 }
 
 /**
  * Update an existing batch.
- * @param batchId - ID of the batch to update (used to build the URL)
+ * @param batchId - ID of the batch to update
  * @param payload - Fields to update
  */
-export const updateBatch = (batchId: string, payload: UpdateBatchPayload) =>
+export const updateBatch = (batchId: string, payload: UpdateBatchPayloadAPI) =>
   put(BATCH_MANAGEMENT.UPDATE_BATCH, payload);
 
 /* ─────────────────────────────────────────────────────────────────────────────

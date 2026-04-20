@@ -2,7 +2,7 @@ import React from "react";
 import {
   Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TablePagination,
-  Box, Typography, Divider, Chip,
+  Box, Typography, Divider, Chip, Button, Tooltip,
 } from "@mui/material";
 
 import { icons } from "../../../../../../app/theme/icons";
@@ -25,8 +25,9 @@ import {
   getPriority,
   getDept,
   getSubDept,
-  getAssignedTo,
+  getSystemManagerId,
   getNotes,
+  needsImplementationCompletion,
 } from "./BatchConfigs";
 
 const S = STRINGS.BATCH_MANAGEMENT;
@@ -42,6 +43,7 @@ const BatchListTable = ({
   t,
   onEdit,
   onDelete,
+  onCompleteImplementation,
   onPageChange,
   onRowsPerPageChange,
 }: any) => {
@@ -89,11 +91,12 @@ const BatchListTable = ({
                 const priority   = getPriority(batch);
                 const dept       = getDept(batch);
                 const subDept    = getSubDept(batch);
-                const assignedTo = getAssignedTo(batch);
+                const systemMgrId = getSystemManagerId(batch);
                 const dc         = getDeptConfig(dept, departments);
                 const scStage    = stageConfig[stage];
                 const scStatus   = statusConfig[status];
                 const pc         = priorityConfig[priority];
+                const needsImpl   = needsImplementationCompletion(batch);
 
                 return (
                   <TableRow key={batch.id || batch.batchId} sx={table.row}>
@@ -106,7 +109,7 @@ const BatchListTable = ({
                       </Box>
                     </TableCell>
 
-                    {/* Motor ID */}
+                    {/* Motor ID(s) */}
                     <TableCell sx={table.cell}>
                       <Box sx={tableCell.motorIdBox}>
                         <icons.batchMgmt.motorId sx={tableCell.motorIdIcon} />
@@ -151,29 +154,26 @@ const BatchListTable = ({
                       />
                     </TableCell>
 
-                    {/* Assigned To (System Manager) */}
-                    <TableCell sx={table.cell}>
-                      {assignedTo ? (
-                        <Box sx={tableCell.assignedToBox}>
-                          <UserAvatar
-                            name={assignedTo.name || assignedTo.fullName || assignedTo.username || "?"}
-                            sx={tableCell.assignedAvatar}
-                          />
-                          <Typography sx={tableCell.assignedName}>
-                            {assignedTo.name || assignedTo.fullName || assignedTo.username}
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Typography sx={tableCell.assignedEmpty}>Unassigned</Typography>
-                      )}
-                    </TableCell>
-
                     {/* Actions */}
                     <TableCell sx={table.cellActionsWrapper}>
-                      <UserActions
-                        onEdit={() => onEdit(batch)}
-                        onDelete={() => onDelete(batch)}
-                      />
+                      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                        {needsImpl && onCompleteImplementation && (
+                          <Tooltip title="Complete implementation details">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => onCompleteImplementation(batch)}
+                              sx={{ whiteSpace: "nowrap" }}
+                            >
+                              Complete
+                            </Button>
+                          </Tooltip>
+                        )}
+                        <UserActions
+                          onEdit={() => onEdit(batch)}
+                          onDelete={() => onDelete(batch)}
+                        />
+                      </Box>
                     </TableCell>
 
                   </TableRow>

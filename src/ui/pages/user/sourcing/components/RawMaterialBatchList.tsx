@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Chip, Typography } from "@mui/material";
+import { Box, Button, Chip, Stack, Typography } from "@mui/material";
 import { icons } from "../../../../../app/theme/icons";
 import IconText from "../../../../components/common/IconText";
 import UserBatchList from "../../../../components/custom/UserBatchList";
@@ -28,6 +28,9 @@ export const OPERATION_STATUS_CONFIG = getOperationStatusConfig({
   rejected: CancelRoundedIcon,
 });
 
+const canShowEditButton = (status: string) =>
+  status === OPERATION_STATUS.INITIATED || status === OPERATION_STATUS.IN_PROGRESS;
+
 const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
   const mode = useThemeStore((state) => state.mode);
   const theme = useMemo(() => getSourcingTheme(mode), [mode]);
@@ -46,44 +49,65 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     setStatusFilter,
     loading,
     handleFillForm,
-    handleEditForm,
+    handleEditLot,
+    handleCreateLot,
   } = hookState;
 
   const statusConfig = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(OPERATION_STATUS_CONFIG).map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }]),
+        Object.entries(OPERATION_STATUS_CONFIG).map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
       ),
-    [theme],
+    [theme]
   );
 
   const COLUMNS = useMemo(
     () => [
       {
-        key: "batchId",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_BATCH_ID,
+        key: "lotId",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_LOT_ID,
         render: (v: string) => <Typography sx={theme.batchList.batchIdText}>{v}</Typography>,
       },
       {
-        key: "batchType",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_BATCH_TYPE,
+        key: "procurementId",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_PROCUREMENT_ID,
+        render: (v: string) => <Typography sx={theme.batchList.normalText}>{v}</Typography>,
+      },
+      {
+        key: "materialCode",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_MATERIAL_CODE,
         align: "center",
         render: (v: string) => <Chip label={v} size="small" sx={theme.batchList.batchTypeChip} />,
       },
       {
-        key: "motorId",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_ID,
+        key: "materialName",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_MATERIAL_NAME,
         render: (v: string) => <Typography sx={theme.batchList.normalText}>{v}</Typography>,
       },
       {
-        key: "motorType",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_TYPE,
-        align: "center",
-        render: (v: string) => <Chip label={`${STRINGS.SOURCING.BATCH_LIST.MOTOR_TYPE_PREFIX}${v}`} size="small" sx={theme.batchList.batchTypeChip} />,
+        key: "supplyOrderNo",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_SUPPLY_ORDER,
+        render: (v: string) => <Typography sx={theme.batchList.subtleText}>{v}</Typography>,
       },
       {
-        key: "assignedTo.fullName",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_MANAGER,
+        key: "receiptDate",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_RECEIPT_DATE,
+        render: (v: string) => (
+          <IconText
+            icon={<CalendarMonthRoundedIcon sx={theme.batchList.icon} />}
+            text={v || "—"}
+            textSx={theme.batchList.subtleText}
+          />
+        ),
+      },
+      {
+        key: "manufacturerName",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_MANUFACTURER,
+        render: (v: string) => <Typography sx={theme.batchList.subtleText}>{v}</Typography>,
+      },
+      {
+        key: "createdBy.fullName",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_CREATED_BY,
         render: (v: string) => (
           <IconText
             icon={<PersonRoundedIcon sx={theme.batchList.icon} />}
@@ -98,23 +122,14 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         render: (v: string) => (
           <IconText
             icon={<CalendarMonthRoundedIcon sx={theme.batchList.icon} />}
-            text={new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            text={v ? new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
             textSx={theme.batchList.subtleText}
           />
         ),
       },
       {
-        key: "priority",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_PRIORITY,
-        align: "center",
-        render: (v: string) => {
-          const cfg = theme.batchList.priorityConfig[v] ?? theme.batchList.priorityConfig.Medium;
-          return <Chip label={v} size="small" sx={{ height: 22, fontSize: "0.68rem", fontWeight: 700, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }} />;
-        },
-      },
-      {
         key: "rmStatus",
-        label: "Operation Status",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_RM_STATUS,
         align: "center",
         render: (v: string, row: any) => (
           <UserWorkflowStatusCell
@@ -127,52 +142,62 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         ),
       },
     ],
-    [statusConfig, theme],
+    [statusConfig, theme]
   );
 
   return (
-    <UserBatchList
-      rows={batches}
-      columns={COLUMNS}
-      statusField="rmStatus"
-      statusConfig={statusConfig}
-      filters={[{ field: "priority", options: ["Critical", "High", "Medium", "Low"] }]}
-      searchFields={["batchId", "motorId"]}
-      highlightRow={(row: any) => row.rmStatus === OPERATION_STATUS.REJECTED}
-      highlightColor={theme.palette.danger}
-      rowsPerPageOptions={rowsPerPageOptions}
-      tableLabel={STRINGS.SOURCING.BATCH_LIST.RM_TITLE}
-      themeTokens={theme}
-      
-      // Hook up generic hook logic explicitly
-      totalRecords={totalRecords}
-      statusCounts={statusCounts}
-      page={page}
-      rowsPerPage={rowsPerPage}
-      search={search}
-      statusFilter={statusFilter}
-      onPageChange={setPage}
-      onRowsPerPageChange={setRowsPerPage}
-      onSearchChange={setSearch}
-      onStatusFilterChange={setStatusFilter}
-      isLoading={loading}
+    <Box>
+      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 2 }}>
+        <Button variant="contained" size="medium" onClick={handleCreateLot} sx={{ textTransform: "none", fontWeight: 700 }}>
+          {STRINGS.SOURCING.BATCH_LIST.CREATE_LOT}
+        </Button>
+      </Stack>
 
-      renderAction={(row: any) => {
-        return (
-          <UserWorkflowStatusAction
-            status={row.rmStatus}
-            row={row}
-            statusMap={OPERATION_STATUS}
-            onFillForm={handleFillForm}
-            onEditForm={handleEditForm}
-            theme={theme}
-            fillLabel={STRINGS.SOURCING.BATCH_LIST.FILL_ACTION}
-            continueLabel={STRINGS.SOURCING.BATCH_LIST.CONTINUE_ACTION}
-            editTooltip={STRINGS.SOURCING.BATCH_LIST.EDIT_ACTION_TOOLTIP}
-          />
-        );
-      }}
-    />
+      <UserBatchList
+        rows={batches}
+        columns={COLUMNS}
+        statusField="rmStatus"
+        statusConfig={statusConfig}
+        filters={[]}
+        searchFields={["lotId", "procurementId", "materialCode", "materialName", "manufacturerName", "supplyOrderNo"]}
+        highlightRow={(row: any) => row.rmStatus === OPERATION_STATUS.REJECTED}
+        highlightColor={theme.palette.danger}
+        rowsPerPageOptions={rowsPerPageOptions}
+        tableLabel={STRINGS.SOURCING.BATCH_LIST.RM_TITLE}
+        themeTokens={theme}
+        totalRecords={totalRecords}
+        statusCounts={statusCounts}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        search={search}
+        statusFilter={statusFilter}
+        onPageChange={setPage}
+        onRowsPerPageChange={setRowsPerPage}
+        onSearchChange={setSearch}
+        onStatusFilterChange={setStatusFilter}
+        isLoading={loading}
+        renderAction={(row: any) => (
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" flexWrap="wrap">
+            <UserWorkflowStatusAction
+              status={row.rmStatus}
+              row={row}
+              statusMap={OPERATION_STATUS}
+              onFillForm={handleFillForm}
+              onEditForm={handleEditLot}
+              theme={theme}
+              fillLabel={STRINGS.SOURCING.BATCH_LIST.FILL_ACTION}
+              continueLabel={STRINGS.SOURCING.BATCH_LIST.CONTINUE_ACTION}
+              editTooltip={STRINGS.SOURCING.BATCH_LIST.EDIT_ACTION_TOOLTIP}
+            />
+            {canShowEditButton(row.rmStatus) && (
+              <Button variant="outlined" size="small" onClick={() => handleEditLot(row)} sx={theme.batchList.action.secondary}>
+                {STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
+              </Button>
+            )}
+          </Stack>
+        )}
+      />
+    </Box>
   );
 };
 

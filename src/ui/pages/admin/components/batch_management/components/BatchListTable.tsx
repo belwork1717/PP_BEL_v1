@@ -8,7 +8,6 @@ import {
 import { icons } from "../../../../../../app/theme/icons";
 import { STRINGS } from "../../../../../../app/config/strings";
 
-import UserAvatar  from "../../../../../components/common/UserAvatar";
 import UserActions from "../../../../../components/common/UserActions";
 import SkeletonRow from "../../../../../components/common/SkeletonRow";
 
@@ -16,17 +15,14 @@ import {
   stageConfig,
   statusConfig,
   priorityConfig,
-  getDeptConfig,
   getBatchId,
   getMotorId,
   getMotorType,
   getStage,
   getStatus,
   getPriority,
-  getDept,
   getSubDept,
-  getSystemManagerId,
-  getNotes,
+  getSystemManagerLabel,
   needsImplementationCompletion,
 } from "./BatchConfigs";
 
@@ -89,10 +85,8 @@ const BatchListTable = ({
                 const stage      = getStage(batch);
                 const status     = getStatus(batch);
                 const priority   = getPriority(batch);
-                const dept       = getDept(batch);
                 const subDept    = getSubDept(batch);
-                const systemMgrId = getSystemManagerId(batch);
-                const dc         = getDeptConfig(dept, departments);
+                const systemMgrLabel = getSystemManagerLabel(batch);
                 const scStage    = stageConfig[stage];
                 const scStatus   = statusConfig[status];
                 const pc         = priorityConfig[priority];
@@ -152,6 +146,11 @@ const BatchListTable = ({
                         size="small"
                         sx={tableCell.priorityChip(pc)}
                       />
+                    </TableCell>
+
+                    {/* System Manager */}
+                    <TableCell sx={table.cell}>
+                      <Typography sx={tableCell.motorIdText}>{systemMgrLabel}</Typography>
                     </TableCell>
 
                     {/* Actions */}

@@ -6,34 +6,18 @@ import { useAuthStore } from "../../../app/store/authStore";
 import { APPROVER_STATUS_META, APPROVER_PRIORITY_META } from "../../../app/theme/approver";
 import useApproverFormAction from "../useApproverFormAction";
 import rawMaterialProcurementController from "../../../controllers/user/sourcing/rawMaterialProcurementController";
+import {
+  RawMaterialLotDetailsModel,
+  RawMaterialProcurementDetailsModel,
+} from "../../../data/models/user/RawMaterialProcurementModel";
 
 const DEPARTMENT_SLUG = "sourcing";
 const SUB_DEPARTMENT_SLUG = "raw-material";
 
 const S = STRINGS.SOURCING.SPECIFICATION_FORM;
 
-const mapDetailsToQcBlocks = (details: any) =>
-  (details?.materials ?? []).map((material: any) => ({
-    material: material.materialCode,
-    lotNo: material.lotNo ?? "",
-    rows: (material.specifications ?? []).map((spec: any) => ({
-      specificationCode: spec.specificationCode,
-      specification: spec.specificationName,
-      refRange:
-        spec?.referenceRange?.minValue != null && spec?.referenceRange?.maxValue != null
-          ? `${spec.referenceRange.minValue} - ${spec.referenceRange.maxValue}${spec.referenceRange.unit ? ` ${spec.referenceRange.unit}` : ""}`
-          : spec?.referenceRange?.minValue != null
-            ? `>= ${spec.referenceRange.minValue}${spec.referenceRange.unit ? ` ${spec.referenceRange.unit}` : ""}`
-            : spec?.referenceRange?.maxValue != null
-              ? `<= ${spec.referenceRange.maxValue}${spec.referenceRange.unit ? ` ${spec.referenceRange.unit}` : ""}`
-              : "N/A",
-      analysedResult:
-        spec.analysedResult === null || spec.analysedResult === undefined
-          ? ""
-          : String(spec.analysedResult),
-      remarks: spec.remarks ?? "",
-    })),
-  }));
+const mapDetailsToQcBlocks = (details: RawMaterialProcurementDetailsModel) =>
+  RawMaterialProcurementDetailsModel.toMaterialBlocks(details);
 
 export const useRawMaterialApproverHook = () => {
   const user = useAuthStore((state) => state.user);
@@ -68,6 +52,28 @@ export const useRawMaterialApproverHook = () => {
       return;
     }
 
+    const lotId = row?.lotId ?? row?.lot_id;
+
+    if (lotId) {
+      const response = await rawMaterialProcurementController.fetchLotDetails({ lotId });
+      setDetailsLoading(false);
+
+      if (!response?.success || !response.data) {
+        showAlert(response?.message || S.DETAILS_FETCH_ERROR, "error", { autoCloseMs: 3500 });
+        setSelected(null);
+        return;
+      }
+
+      const model = response.data as RawMaterialLotDetailsModel;
+      setSelected({
+        ...row,
+        batchId: row.batchId ?? model.lotId,
+        formId: row.formId ?? model.lotId,
+        qcBlocks: RawMaterialLotDetailsModel.toMaterialBlocks(model),
+      });
+      return;
+    }
+
     if (!row?.formId) {
       setDetailsLoading(false);
       setSelected(null);
@@ -82,7 +88,7 @@ export const useRawMaterialApproverHook = () => {
 
     setDetailsLoading(false);
 
-    if (!response?.success || !response?.data) {
+    if (!response?.success || !response.data) {
       showAlert(response?.message || S.DETAILS_FETCH_ERROR, "error", { autoCloseMs: 3500 });
       setSelected(null);
       return;

@@ -27,11 +27,15 @@ export const fetchBatchStatsApi = (
 ───────────────────────────────────────────────────────────────────────────── */
 
 export interface BatchFilters {
-  search?       : string;
-  status?       : string;
-  priority?     : string;
-  department?   : string;
-  subDepartment?: string;
+  search?         : string;
+  status?         : string;
+  priority?       : string;
+  department?     : string;
+  subDepartment?  : string;
+  /** Filter by one or more motor IDs (POST body filters.motorIds) */
+  motorIds?       : string[];
+  /** Filter by one or more lot IDs (POST body filters.lotIds) */
+  lotIds?         : string[];
 }
 
 export interface BatchSort {
@@ -52,10 +56,13 @@ export const fetchAllBatches = (
   filters: BatchFilters = {},
   sort   : BatchSort    = { field: "createdOn", order: "desc" }
 ) => {
-  // Strip undefined / empty strings — server expects {} for "no filters"
-  const cleanFilters: Record<string, string> = {};
-  (Object.entries(filters) as [string, string | undefined][]).forEach(([key, val]) => {
-    if (val !== undefined && val !== "") cleanFilters[key] = val;
+  // Strip undefined / empty — server expects {} for "no filters"
+  const cleanFilters: Record<string, string | string[]> = {};
+  (Object.entries(filters) as [string, string | string[] | undefined][]).forEach(([key, val]) => {
+    if (val === undefined || val === null) return;
+    if (typeof val === "string" && val.trim() === "") return;
+    if (Array.isArray(val) && val.length === 0) return;
+    cleanFilters[key] = val as string | string[];
   });
 
   const payload = {
@@ -93,7 +100,7 @@ export const fetchBatchById = (batchId: string) =>
 export interface CreateBatchPayloadAPI {
   batchType           : string;
   subBatchType?       : string;
-  projectId?          : string;
+  projectId?          : string | null;
   motorType           : { motorTypeId: number; motorTypeName: string };
   numberOfMotors      : number;
   motorIds            : string[];
@@ -118,9 +125,10 @@ export const createBatch = (payload: CreateBatchPayloadAPI) =>
 ───────────────────────────────────────────────────────────────────────────── */
 
 export interface UpdateBatchPayloadAPI {
+  batchId             : string;
   batchType           : string;
   subBatchType?       : string;
-  projectId?          : string;
+  projectId?          : string | null;
   motorType           : { motorTypeId: number; motorTypeName: string };
   numberOfMotors      : number;
   motorIds            : string[];
@@ -132,11 +140,9 @@ export interface UpdateBatchPayloadAPI {
 }
 
 /**
- * Update an existing batch.
- * @param batchId - ID of the batch to update
- * @param payload - Fields to update
+ * Update an existing batch (PUT body includes batchId per API contract).
  */
-export const updateBatch = (batchId: string, payload: UpdateBatchPayloadAPI) =>
+export const updateBatch = (payload: UpdateBatchPayloadAPI) =>
   put(BATCH_MANAGEMENT.UPDATE_BATCH, payload);
 
 /* ─────────────────────────────────────────────────────────────────────────────

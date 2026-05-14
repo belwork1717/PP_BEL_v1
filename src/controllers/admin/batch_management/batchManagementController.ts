@@ -6,7 +6,7 @@ import {
   updateBatch,
   deleteBatch,
 } from "../../../data/api/admin/batchManagementAPI";
-import type { BatchFilters, BatchSort } from "../../../data/api/admin/batchManagementAPI";
+import type { BatchFilters, BatchSort, UpdateBatchPayloadAPI } from "../../../data/api/admin/batchManagementAPI";
 import {
   BatchListItemModel,
   BatchStatsModel,
@@ -133,8 +133,8 @@ export const batchManagementController = {
 
     try {
       // Model constructor accepts only (form) — updatedBy is derived server-side
-      const payload  = new UpdateBatchPayload(form);
-      const response = await updateBatch(batchId, payload);
+      const payload  = new UpdateBatchPayload(batchId, form);
+      const response = await updateBatch(payload as unknown as UpdateBatchPayloadAPI);
       if (response?.success === false) throw response;
 
       showAlert(

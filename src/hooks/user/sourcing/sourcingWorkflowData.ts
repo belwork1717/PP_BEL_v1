@@ -1,37 +1,10 @@
 import { OPERATION_STATUS } from "../../operationStatus";
 
+export type { MaterialBlock, SpecRow } from "../../../data/models/user/RawMaterialProcurementModel";
+
 export const SOURCING_STATUS = OPERATION_STATUS;
 
 export type SourcingStatus = (typeof SOURCING_STATUS)[keyof typeof SOURCING_STATUS];
-
-export type SpecRow = {
-  specificationCode?: string;
-  specification: string;
-  refRange: string;
-  analysedResult: string;
-  remarks: string;
-};
-
-export type MaterialBlock = {
-  material: string;
-  lotNo: string;
-  rows: SpecRow[];
-};
-
-export type RawMaterialBatch = {
-  id: number;
-  formId?: string | null;
-  batchId: string;
-  batchType: string;
-  motorId: string;
-  motorType: string;
-  priority: string;
-  assignedTo: { fullName: string } | null;
-  createdOn: string;
-  rmStatus: SourcingStatus;
-  draftData: MaterialBlock[];
-  rejectionReason: string | null;
-};
 
 export type RocketFormData = {
   motorIdDetails: string;
@@ -94,5 +67,3 @@ export const SUB_DEPT_LABELS: Record<string, string> = {
   "raw-material": "Raw Material Procurement",
   "rocket-motor": "Rocket Motor Casing",
 };
-
-

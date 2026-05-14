@@ -1,53 +1,42 @@
 import { ApiResponseModel } from "../../../data/models/common/ApiResponseModel";
 import {
+  RawMaterialCreateFormPayload,
+  RawMaterialLotDetailsModel,
+  RawMaterialLotListRequest,
+  RawMaterialLotUpdatePayload,
   RawMaterialProcurementDetailsModel,
   RawMaterialProcurementSubmitResponseModel,
 } from "../../../data/models/user/RawMaterialProcurementModel";
 import {
   createRawMaterialProcurementFormApi,
+  fetchRawMaterialLotListApi,
   fetchRawMaterialProcurementFormDetailsApi,
   updateRawMaterialProcurementFormApi,
 } from "../../../data/api/users/sourcing/rawMaterialProcurementApi";
-
-export type RawMaterialCreatePayload = {
-  batchId: string;
-  subDepartmentId: number;
-  formSubmissionType: "DRAFT" | "SUBMIT";
-  materials: Array<{
-    materialCode: string;
-    lotNo: string;
-    specifications: Array<{
-      specificationCode: string;
-      analysedResult: number | null;
-      remarks: string;
-    }>;
-  }>;
-};
-
-export type RawMaterialUpdatePayload = {
-  formId: string;
-  subDepartmentId: number;
-  formSubmissionType: "DRAFT" | "UPDATE";
-  materials: Array<{
-    materialCode: string;
-    lotNo: string;
-    specifications: Array<{
-      specificationCode: string;
-      analysedResult: number | null;
-      remarks: string;
-    }>;
-  }>;
-};
 
 export type RawMaterialDetailsPayload = {
   formId: string;
   subDepartmentId: number;
 };
 
+export type RawMaterialLotDetailsPayload = {
+  lotId: string;
+};
+
 export const rawMaterialProcurementController = {
-  createForm: async (payload: RawMaterialCreatePayload) => {
+  fetchLotList: async (payload: RawMaterialLotListRequest) => {
     try {
-      const response = await createRawMaterialProcurementFormApi(payload);
+      const response = await fetchRawMaterialLotListApi(payload as unknown as Record<string, unknown>);
+      return new ApiResponseModel(response);
+    } catch (error) {
+      console.error("Failed to fetch raw material lot list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  createForm: async (payload: RawMaterialCreateFormPayload) => {
+    try {
+      const response = await createRawMaterialProcurementFormApi(payload as unknown as Record<string, unknown>);
       return new ApiResponseModel<RawMaterialProcurementSubmitResponseModel>(response, (res) =>
         RawMaterialProcurementSubmitResponseModel.fromApi(res)
       );
@@ -57,6 +46,19 @@ export const rawMaterialProcurementController = {
     }
   },
 
+  fetchLotDetails: async (payload: RawMaterialLotDetailsPayload) => {
+    try {
+      const response = await fetchRawMaterialProcurementFormDetailsApi({ lotId: payload.lotId });
+      return new ApiResponseModel<RawMaterialLotDetailsModel>(response, (res) =>
+        RawMaterialLotDetailsModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch raw material lot details:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /** Legacy: formId + subDepartmentId (e.g. approver) */
   fetchFormDetails: async (payload: RawMaterialDetailsPayload) => {
     try {
       const response = await fetchRawMaterialProcurementFormDetailsApi(payload);
@@ -69,9 +71,9 @@ export const rawMaterialProcurementController = {
     }
   },
 
-  updateForm: async (payload: RawMaterialUpdatePayload) => {
+  updateForm: async (payload: RawMaterialLotUpdatePayload) => {
     try {
-      const response = await updateRawMaterialProcurementFormApi(payload);
+      const response = await updateRawMaterialProcurementFormApi(payload as unknown as Record<string, unknown>);
       return new ApiResponseModel<RawMaterialProcurementSubmitResponseModel>(response, (res) =>
         RawMaterialProcurementSubmitResponseModel.fromApi(res)
       );

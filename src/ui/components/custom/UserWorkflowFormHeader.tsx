@@ -16,6 +16,8 @@ type UserWorkflowFormHeaderProps = {
   isEdit: boolean;
   onBack: () => void;
   newLabel: string;
+  /** When set, replaces the batchId · motorId line (raw material Create Lot, etc.) */
+  batchHeadingOverride?: { title: string; subtitle?: string };
   includeMotorType?: boolean;
   backLabel?: string;
   editLabel?: string;
@@ -31,6 +33,7 @@ const UserWorkflowFormHeader = ({
   isEdit,
   onBack,
   newLabel,
+  batchHeadingOverride,
   includeMotorType = false,
   backLabel = "Back to List",
   editLabel = "Editing Rejected Submission",
@@ -57,11 +60,20 @@ const UserWorkflowFormHeader = ({
           <Divider orientation="vertical" flexItem sx={theme.workflow.formHeader.divider} />
 
           <Stack gap={0.3}>
-            <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-              <Typography sx={theme.workflow.formHeader.batchId}>{batch.batchId}</Typography>
-              <Typography sx={theme.workflow.formHeader.bullet}>.</Typography>
-              <Typography sx={theme.workflow.formHeader.motorId}>{batch.motorId}</Typography>
-            </Stack>
+            {batchHeadingOverride ? (
+              <Stack gap={0.25}>
+                <Typography sx={theme.workflow.formHeader.batchId}>{batchHeadingOverride.title}</Typography>
+                {batchHeadingOverride.subtitle ? (
+                  <Typography sx={theme.workflow.formHeader.motorId}>{batchHeadingOverride.subtitle}</Typography>
+                ) : null}
+              </Stack>
+            ) : (
+              <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
+                <Typography sx={theme.workflow.formHeader.batchId}>{batch.batchId}</Typography>
+                <Typography sx={theme.workflow.formHeader.bullet}>.</Typography>
+                <Typography sx={theme.workflow.formHeader.motorId}>{batch.motorId}</Typography>
+              </Stack>
+            )}
             <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
               {isEdit ? (
                 <Chip

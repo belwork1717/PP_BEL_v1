@@ -14,9 +14,9 @@ import ConfirmAlertDialog from "../../../../components/common/ConfirmAlertDialog
 import StackRow from "../../../../components/common/StackRow";
 import UserWorkflowActionBar from "../../../../components/custom/UserWorkflowActionBar";
 import MaterialSpecificationBlock from "./MaterialSpecificationBlock";
-import useSpecificationFormBuilderHook, {
+import useRawMaterialSpecificationForm, {
   SpecificationBlock,
-} from "../../../../../hooks/user/sourcing/useSpecificationFormBuilderHook";
+} from "../../../../../hooks/user/sourcing/useRawMaterialSpecificationForm";
 
 const {
   add: AddRoundedIcon,
@@ -29,6 +29,8 @@ const {
 type SpecificationFormBuilderProps = {
   initialBlocks?: SpecificationBlock[];
   isEditMode?: boolean;
+  /** When true (Create Lot flow), header copy and lot-oriented labels match the create procurement API */
+  createLotMode?: boolean;
   onSaveDraft?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
   onSubmit?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
   onBlocksChange?: (blocks: SpecificationBlock[]) => void;
@@ -45,6 +47,7 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
     canSubmit,
     closeDraftConfirm,
     closeSubmitConfirm,
+    createLotMode,
     disableActionBar,
     draftConfirm,
     filledRows,
@@ -55,6 +58,8 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
     handleRemoveBlock,
     handleUpdateBlock,
     hasBlocks,
+    headerSubtitle,
+    headerTitle,
     isEditMode,
     isMaterialLoading,
     loadingMaterials,
@@ -66,7 +71,7 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
     submitConfirm,
     theme,
     totalRows,
-  } = useSpecificationFormBuilderHook(props);
+  } = useRawMaterialSpecificationForm(props);
 
   return (
     <Box>
@@ -83,8 +88,8 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
             <ScienceRoundedIcon sx={{ ...specStyles.whiteIcon, ...specStyles.headerScienceIcon }} />
           </Box>
           <Box>
-            <Typography sx={specStyles.headerTitle}>{formStrings.TITLE}</Typography>
-            <Typography sx={specStyles.headerSubtitle}>{formStrings.SUBTITLE}</Typography>
+            <Typography sx={specStyles.headerTitle}>{headerTitle}</Typography>
+            <Typography sx={specStyles.headerSubtitle}>{headerSubtitle}</Typography>
           </Box>
         </Stack>
       </Stack>
@@ -92,7 +97,15 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
       {hasBlocks && (
         <Stack direction="row" gap={1.5} mb={2.5} flexWrap="wrap">
           <Chip
-            label={`${blocks.length} ${blocks.length > 1 ? formStrings.BLOCK_SUFFIX_PLURAL : formStrings.BLOCK_SUFFIX}`}
+            label={`${blocks.length} ${
+              createLotMode
+                ? blocks.length > 1
+                  ? formStrings.LOT_SUFFIX_PLURAL
+                  : formStrings.LOT_SUFFIX
+                : blocks.length > 1
+                  ? formStrings.BLOCK_SUFFIX_PLURAL
+                  : formStrings.BLOCK_SUFFIX
+            }`}
             size="small"
             sx={specStyles.summaryPrimaryChip}
           />
@@ -167,6 +180,7 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
             key={`${block.material}-${idx}`}
             block={block}
             index={idx}
+            createLotMode={createLotMode}
             onUpdate={handleUpdateBlock}
             onRemove={handleRemoveBlock}
             theme={theme}

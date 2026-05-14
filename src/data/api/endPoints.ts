@@ -191,6 +191,7 @@ export const SYSTEM_MANAGER = {
 // =============================
 export const USER_OPERATIONS_ENDPOINTS = {
   BATCH_LIST: `${API_BASE}/user/subdepartment/batch-list`,
+  LOT_LIST: `${API_BASE}/user/subdepartment/lot-list`,
   MATERIALS_LIST: `${API_BASE}/user/subdepartment/materials-list`,
   MATERIAL_SPECIFICATION_LIST: `${API_BASE}/user/subdepartment/materials/specification-list`,
   DIMENSIONAL_PARAMETERS_LIST: `${API_BASE}/user/subdepartment/dimensional/parameters-list`,

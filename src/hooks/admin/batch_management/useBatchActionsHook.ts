@@ -67,7 +67,7 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
     numberOfMotors:  b.numberOfMotors  ?? 1,
     motorIds:        Array.isArray(b.motorIds) ? b.motorIds : [""],
     priority:        b.priority        ?? "Medium",
-    systemManagerId: b.systemManagerId ?? "",
+    systemManagerId: b.systemManager?.id ?? b.systemManagerId ?? "",
     objective:       b.objective ?? "",
     articles:        Array.isArray(b.articles) ? b.articles : [],
     identificationSheet: b.identificationSheet ?? { ...EMPTY_BATCH_FORM.identificationSheet },
@@ -184,16 +184,9 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
     setSaving(true);
     useAlertStore.getState().showAlert(S.MESSAGES.SAVING_BATCH, "info", { loading: true });
 
-    const formForApi = {
-      ...batchForm,
-      motorType: batchForm.motorType
-        ? { motorTypeId: 0, motorTypeName: batchForm.motorType }
-        : { motorTypeId: 0, motorTypeName: "" },
-    };
-
     const ok = editTarget
-      ? await batchManagementController.updateBatch(editTarget.batchId, formForApi)
-      : await batchManagementController.createBatch(formForApi);
+      ? await batchManagementController.updateBatch(editTarget.batchId, batchForm)
+      : await batchManagementController.createBatch(batchForm);
 
     if (ok) {
       setTimeout(() => {

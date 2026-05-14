@@ -18,6 +18,7 @@ const RawMaterialProcurement = () => {
     view,
     activeBatch,
     isEditMode,
+    formEntryMode,
     formBlocks,
     loadingFormDetails,
     actionLoading,
@@ -29,6 +30,14 @@ const RawMaterialProcurement = () => {
     handleSaveDraft,
     handleSubmit,
   } = hookState;
+
+  const createLotHeaderHeading =
+    !isEditMode && formEntryMode === "create"
+      ? {
+          title: STRINGS.SOURCING.RAW_MATERIAL.FORM_HEADER_CREATE_LOT_TITLE,
+          subtitle: STRINGS.SOURCING.RAW_MATERIAL.FORM_HEADER_CREATE_LOT_SUBTITLE,
+        }
+      : undefined;
 
   return (
     <Box sx={theme.workflow.animatedContainer}>
@@ -43,6 +52,7 @@ const RawMaterialProcurement = () => {
             isEdit={isEditMode}
             onBack={handleBack}
             newLabel={STRINGS.SOURCING.RAW_MATERIAL.NEW_SUBMISSION}
+            batchHeadingOverride={createLotHeaderHeading}
             theme={theme}
           />
 
@@ -50,6 +60,7 @@ const RawMaterialProcurement = () => {
             <SpecificationFormBuilder
               initialBlocks={formBlocks}
               isEditMode={isEditMode}
+              createLotMode={formEntryMode === "create"}
               onBlocksChange={handleBlocksChange}
               onSaveDraft={handleSaveDraft}
               onSubmit={handleSubmit}

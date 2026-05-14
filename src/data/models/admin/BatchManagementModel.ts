@@ -1,26 +1,50 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    BATCH MANAGEMENT MODELS
-   Aligned to actual API request / response contracts.
+   Aligned to admin batch API request / response contracts (list, details, create, update).
 ───────────────────────────────────────────────────────────────────────────── */
 
 import { icons } from "../../../app/theme";
 
+/** Map display / list labels to form/API enum values */
+function normalizeBatchTypeForForm(raw: string | undefined | null): string {
+  if (!raw) return "MAIN";
+  const s = String(raw).trim();
+  const u = s.toUpperCase();
+  if (u === "MAIN" || u.includes("MAIN")) return "MAIN";
+  if (u === "SUBSCALE" || u.includes("SUBSCALE")) return "SUBSCALE";
+  return s;
+}
+
+/** List endpoint may return motorType as a string (e.g. "B"); details return an object */
+function normalizeMotorType(raw: any): { motorTypeId: number | null; motorTypeName: string } {
+  if (!raw) return { motorTypeId: null, motorTypeName: "" };
+  if (typeof raw === "string") {
+    return { motorTypeId: null, motorTypeName: raw };
+  }
+  return {
+    motorTypeId: raw.motorTypeId ?? null,
+    motorTypeName: raw.motorTypeName ?? "",
+  };
+}
+
+/** Infer motorTypeId when UI only has letter codes (A/B/…); prefer explicit API values */
+const MOTOR_TYPE_LETTER_TO_ID: Record<string, number> = {
+  A: 1,
+  B: 2,
+  C: 3,
+};
+
+export function inferMotorTypeId(motorTypeName: string, explicitId?: number | null): number {
+  if (explicitId != null && explicitId > 0) return explicitId;
+  const letter = (motorTypeName ?? "").trim().toUpperCase().charAt(0);
+  return MOTOR_TYPE_LETTER_TO_ID[letter] ?? 0;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    READ MODEL  —  BatchListItemModel
-   Maps the batch object inside response.data.batches[] or response.data.batch
-   to a flat, stable shape for table rows and detail views.
+   Maps response.data.batches[] items and response.data.batch (details).
 
-   API shape:
-   {
-     id, batchId, batchType, subBatchType,
-     projectId, numberOfMotors, motorIds: [],
-     motorType: { motorTypeId, motorTypeName },
-     priority, systemManagerId,
-     status, createdOn, createdBy: { id, name },
-     updatedOn?, updatedBy?: { id, name },
-     identificationSheet?: {...},
-     objective?, articles?: []
-   }
+   List extras: projectName, lotIds, systemManager { id, name }, identificationSheetStatus
 ───────────────────────────────────────────────────────────────────────────── */
 export class BatchListItemModel {
   id                  : string | null;
@@ -28,11 +52,15 @@ export class BatchListItemModel {
   batchType           : string;
   subBatchType        : string | null;
   projectId           : string | null;
+  /** Present on list API for display */
+  projectName         : string | null;
   numberOfMotors      : number;
   motorIds            : string[];
+  lotIds              : string[];
   motorType           : { motorTypeId: number | null; motorTypeName: string };
   priority            : string;
   systemManagerId     : string;
+  systemManager       : { id: string; name: string } | null;
 
   // Flattened stage / department fields for easy table access
   department          : { departmentId: number | null; departmentName: string } | null;
@@ -43,7 +71,10 @@ export class BatchListItemModel {
   createdBy           : { id: string; name: string } | null;
   updatedOn           : string | null;
   updatedBy           : { id: string; name: string } | null;
-  
+
+  /** List: "Draft" | "Completed" when provided */
+  identificationSheetStatus : string | null;
+
   // Implementation details (optional)
   identificationSheet : IdentificationSheet | null;
   objective           : string | null;
@@ -52,22 +83,31 @@ export class BatchListItemModel {
   constructor(data: Record<string, any>) {
     this.id              = data.id              ?? null;
     this.batchId         = data.batchId         ?? "";
-    this.batchType       = data.batchType       ?? "MAIN";
+    this.batchType       = normalizeBatchTypeForForm(data.batchType);
     this.subBatchType    = data.subBatchType    ?? null;
     this.projectId       = data.projectId       ?? null;
+    this.projectName     = data.projectName     ?? null;
     this.numberOfMotors  = data.numberOfMotors  ?? 0;
     this.motorIds        = Array.isArray(data.motorIds) ? data.motorIds : [];
+    this.lotIds          = Array.isArray(data.lotIds) ? data.lotIds : [];
     this.priority        = data.priority        ?? "Medium";
-    this.systemManagerId = data.systemManagerId ?? "";
     this.status          = data.status          ?? "Initiated";
-    
-    // motorType — object in API, defensive fallback for missing data
-    this.motorType = data.motorType
-      ? {
-          motorTypeId  : data.motorType.motorTypeId   ?? null,
-          motorTypeName: data.motorType.motorTypeName ?? "",
-        }
-      : { motorTypeId: null, motorTypeName: "" };
+
+    this.motorType = normalizeMotorType(data.motorType);
+
+    if (data.systemManager && typeof data.systemManager === "object") {
+      this.systemManager = {
+        id: data.systemManager.id ?? "",
+        name: data.systemManager.name ?? "",
+      };
+      this.systemManagerId = this.systemManager.id;
+    } else {
+      this.systemManager = null;
+      this.systemManagerId = String(data.systemManagerId ?? "").trim();
+    }
+
+    this.identificationSheetStatus =
+      data.identificationSheetStatus ?? data.identification_sheet_status ?? null;
 
     // stage → department (nested in API response)
     const dept = data.stage?.department ?? null;
@@ -146,7 +186,7 @@ export interface IdentificationSheet {
 export interface BatchWritePayload {
   batchType           : string;
   subBatchType?       : string;
-  projectId?          : string;
+  projectId?          : string | null;
   motorType           : { motorTypeId: number; motorTypeName: string };
   numberOfMotors      : number;
   motorIds            : string[];
@@ -165,7 +205,7 @@ export interface BatchWritePayload {
 export class CreateBatchPayload implements BatchWritePayload {
   batchType           : string;
   subBatchType?       : string;
-  projectId?          : string;
+  projectId?          : string | null;
   motorType           : { motorTypeId: number; motorTypeName: string };
   numberOfMotors      : number;
   motorIds            : string[];
@@ -176,13 +216,32 @@ export class CreateBatchPayload implements BatchWritePayload {
   articles?           : string[];
 
   constructor(form: Record<string, any>) {
-    this.batchType         = form.batchType           ?? "MAIN";
-    this.subBatchType      = form.subBatchType        ?? undefined;
-    this.projectId         = form.projectId           ?? undefined;
-    this.motorType         = {
-      motorTypeId  : form.motorType?.motorTypeId   ?? 0,
-      motorTypeName: form.motorType?.motorTypeName ?? "",
-    };
+    this.batchType = form.batchType ?? "MAIN";
+    this.subBatchType =
+      this.batchType === "SUBSCALE" && form.subBatchType ? form.subBatchType : undefined;
+
+    const isExperimental =
+      this.batchType === "SUBSCALE" && form.subBatchType === "EXPERIMENTAL";
+    if (isExperimental) {
+      const raw = form.projectId;
+      this.projectId =
+        raw === "" || raw === undefined || raw === null ? null : String(raw).trim();
+    } else {
+      const raw = form.projectId;
+      this.projectId =
+        raw === "" || raw === undefined || raw === null ? undefined : String(raw).trim();
+    }
+
+    const motorTypeName =
+      typeof form.motorType === "string"
+        ? form.motorType.trim()
+        : String(form.motorType?.motorTypeName ?? "").trim();
+    const motorTypeId = inferMotorTypeId(
+      motorTypeName,
+      typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined
+    );
+    this.motorType = { motorTypeId: motorTypeId, motorTypeName: motorTypeName };
+
     this.numberOfMotors    = form.numberOfMotors      ?? 0;
     this.motorIds          = Array.isArray(form.motorIds) ? form.motorIds : (form.motorIds ? [form.motorIds] : []);
     this.priority          = form.priority            ?? "Medium";
@@ -194,13 +253,13 @@ export class CreateBatchPayload implements BatchWritePayload {
 }
 
 /**
- * Write model — used when PUTting an updated batch (Step 2 - Implementation Details).
- * Used to update the batch with identificationSheet and other implementation details.
+ * Write model — PUT /admin/batch/update (body includes batchId per API contract).
  */
 export class UpdateBatchPayload implements BatchWritePayload {
+  batchId             : string;
   batchType           : string;
   subBatchType?       : string;
-  projectId?          : string;
+  projectId?          : string | null;
   motorType           : { motorTypeId: number; motorTypeName: string };
   numberOfMotors      : number;
   motorIds            : string[];
@@ -210,14 +269,34 @@ export class UpdateBatchPayload implements BatchWritePayload {
   objective?          : string;
   articles?           : string[];
 
-  constructor(form: Record<string, any>) {
-    this.batchType         = form.batchType           ?? "MAIN";
-    this.subBatchType      = form.subBatchType        ?? undefined;
-    this.projectId         = form.projectId           ?? undefined;
-    this.motorType         = {
-      motorTypeId  : form.motorType?.motorTypeId   ?? 0,
-      motorTypeName: form.motorType?.motorTypeName ?? "",
-    };
+  constructor(batchId: string, form: Record<string, any>) {
+    this.batchId = String(batchId ?? "").trim();
+    this.batchType = form.batchType ?? "MAIN";
+    this.subBatchType =
+      this.batchType === "SUBSCALE" && form.subBatchType ? form.subBatchType : undefined;
+
+    const isExperimental =
+      this.batchType === "SUBSCALE" && form.subBatchType === "EXPERIMENTAL";
+    if (isExperimental) {
+      const raw = form.projectId;
+      this.projectId =
+        raw === "" || raw === undefined || raw === null ? null : String(raw).trim();
+    } else {
+      const raw = form.projectId;
+      this.projectId =
+        raw === "" || raw === undefined || raw === null ? undefined : String(raw).trim();
+    }
+
+    const motorTypeName =
+      typeof form.motorType === "string"
+        ? form.motorType.trim()
+        : String(form.motorType?.motorTypeName ?? "").trim();
+    const motorTypeId = inferMotorTypeId(
+      motorTypeName,
+      typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined
+    );
+    this.motorType = { motorTypeId: motorTypeId, motorTypeName: motorTypeName };
+
     this.numberOfMotors    = form.numberOfMotors      ?? 0;
     this.motorIds          = Array.isArray(form.motorIds) ? form.motorIds : (form.motorIds ? [form.motorIds] : []);
     this.priority          = form.priority            ?? "Medium";

@@ -42,14 +42,25 @@ export const getSubDept    = (b: any): string => {
   }
   return b.subDepartment || b.subDept || "—";
 };
-/** systemManagerId is now a string ID; need to resolve from context if needed */
-export const getSystemManagerId = (b: any) => b.systemManagerId ?? null;
+/** Display label for system manager (list uses nested object; legacy uses flat id) */
+export const getSystemManagerLabel = (b: any): string =>
+  b.systemManager?.name?.trim() ||
+  b.systemManager?.id ||
+  b.systemManagerId ||
+  "—";
+
+/** @deprecated Use getSystemManagerLabel */
+export const getSystemManagerId = (b: any) => getSystemManagerLabel(b);
 /** createdBy is { id, name } in the model */
 export const getCreatedOn  = (b: any) => b.createdOn     || b.createdAt  || null;
 export const getCreatedBy  = (b: any) => b.createdBy     ?? null;
 export const getNotes      = (b: any): string => b.notes || b.description || "";
 
-/** Check if batch needs implementation details completed */
+/** Use identificationSheetStatus when API provides it; else infer from sheet payload */
 export const needsImplementationCompletion = (b: any): boolean => {
+  const sheetStatus =
+    b.identificationSheetStatus ?? b.identification_sheet_status ?? null;
+  if (sheetStatus === "Completed") return false;
+  if (sheetStatus === "Draft") return true;
   return !b.identificationSheet || Object.keys(b.identificationSheet).length === 0;
 };

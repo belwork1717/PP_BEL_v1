@@ -28,6 +28,10 @@ import {
   SpecificationBlock,
   SpecificationRow,
 } from "../../../../../hooks/user/sourcing/useRawMaterialSpecificationForm";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
 
 const {
   delete: DeleteOutlineRoundedIcon,
@@ -251,15 +255,42 @@ const MaterialSpecificationBlock = ({
           />
         </Box>
         <Box flex={1}>
-          <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.RECEIPT_DATE_LABEL}</Typography>
-          <TextField
-            size="small"
-            fullWidth
-            value={block.receiptDate ?? ""}
-            onChange={(e) => handleBlockMeta("receiptDate", e.target.value)}
-            placeholder="DD-MM-YYYY"
-            sx={theme.workflow.formElements.textField}
-          />
+          <Typography sx={theme.workflow.formElements.fieldLabel}>
+            {formStrings.RECEIPT_DATE_LABEL}
+          </Typography>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>
+            <DatePicker
+              format="DD-MM-YYYY"
+              value={block.receiptDate ? dayjs(block.receiptDate, "DD-MM-YYYY") : null}
+              onChange={(v) => handleBlockMeta("receiptDate", v?.format("DD-MM-YYYY") || "")}
+              slotProps={{
+                textField: {
+                  size: "small",
+                  fullWidth: true,
+                  placeholder: "DD-MM-YYYY",
+                  variant: "outlined",
+                  sx: {
+                    ...theme.workflow.formElements.textField,
+                    "& .MuiInputBase-root": {
+                      ...(theme.workflow.formElements.textField?.["& .MuiInputBase-root"] || {}),
+                    },
+                    "& .MuiInputAdornment-root": {
+                      marginLeft: 0,
+                      "& .MuiIconButton-root": {
+                        padding: "2px",
+                        marginRight: "-2px",
+                        color: alpha(theme.palette.text, 0.5),
+                      },
+                    },
+                    "& .MuiInputBase-input": {
+                      py: 1,
+                      ...(theme.workflow.formElements.textField?.["& .MuiInputBase-input"] || {}),
+                    },
+                  },
+                },
+              }}
+            />
+          </LocalizationProvider>
         </Box>
         <Box flex={1}>
           <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.MANUFACTURER_LABEL}</Typography>

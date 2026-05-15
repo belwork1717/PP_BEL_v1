@@ -168,9 +168,14 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
       },
       clearChipSx: {
         fontWeight: 700,
-        fontSize: "0.62rem",
+        fontSize: "0.75rem", // Increased from 0.62rem
+        height: "28px",      // Standard "small" is 24px, "medium" is 32px. 28px is a nice middle ground.
+        px: 0.5,             // Adds a bit of horizontal padding
         borderColor: alpha(theme.palette.danger, 0.35),
         color: theme.palette.danger,
+        '& .MuiChip-label': {
+          px: 1.5,           // Specifically increases padding around the text label
+        },
       },
     }),
     [theme.palette]

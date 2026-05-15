@@ -4,6 +4,7 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 
 type BatchInfo = {
+  lotId: string;
   batchId: string;
   motorId: string;
   motorType?: string;
@@ -69,7 +70,7 @@ const UserWorkflowFormHeader = ({
               </Stack>
             ) : (
               <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-                <Typography sx={theme.workflow.formHeader.batchId}>{batch.batchId}</Typography>
+                <Typography sx={theme.workflow.formHeader.batchId}>{batch.lotId}</Typography>
                 <Typography sx={theme.workflow.formHeader.bullet}>.</Typography>
                 <Typography sx={theme.workflow.formHeader.motorId}>{batch.motorId}</Typography>
               </Stack>

@@ -83,8 +83,14 @@ type BatchListShellProps = {
   onStatusChange?: (value: string) => void;
   resultIcon: ElementType;
   resultText: string;
+  /** Renders at the end of the search field row (e.g. filter toggle) */
+  searchBarEnd?: ReactNode;
+  /** Renders below the search / filter row inside the filter card */
+  filterExtension?: ReactNode;
   searchPlaceholder: string;
   searchValue: string;
+  /** Renders on the same row as status filter tabs (e.g. primary action button) */
+  statusToolbarEnd?: ReactNode;
   statusCounts?: Record<string, number>;
   statusMeta?: BatchListShellStatusMeta;
   statusTabs?: string[];
@@ -108,58 +114,69 @@ const BatchListShell = ({
   resultText,
   searchPlaceholder,
   searchValue,
+  searchBarEnd,
+  filterExtension,
   statusCounts = {},
   statusMeta = {},
   statusTabs = [],
+  statusToolbarEnd,
   theme,
 }: BatchListShellProps) => {
   return (
     <Box sx={theme.sections.root}>
       {statusTabs.length > 0 ? (
-        <Stack {...theme.sections.statusStack}>
-          {statusTabs.map((tab) => {
-            const meta = statusMeta[tab];
-            const isActive = activeStatus === tab;
+        <Stack {...theme.sections.statusStack} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ flex: 1, minWidth: 0 }}>
+            {statusTabs.map((tab) => {
+              const meta = statusMeta[tab];
+              const isActive = activeStatus === tab;
 
-            return (
-              <AppButton
-                key={tab}
-                fullWidth={false}
-                size="small"
-                variant={isActive ? "contained" : "outlined"}
-                onClick={() => onStatusChange?.(tab)}
-                endIcon={
-                  <Chip
-                    label={statusCounts[tab] ?? 0}
-                    size="small"
-                    sx={theme.statusTab.countChip(isActive, meta)}
-                  />
-                }
-                sx={theme.statusTab.button(isActive, meta)}
-              >
-                {meta?.label ?? tab}
-              </AppButton>
-            );
-          })}
+              return (
+                <AppButton
+                  key={tab}
+                  fullWidth={false}
+                  size="small"
+                  variant={isActive ? "contained" : "outlined"}
+                  onClick={() => onStatusChange?.(tab)}
+                  endIcon={
+                    <Chip
+                      label={statusCounts[tab] ?? 0}
+                      size="small"
+                      sx={theme.statusTab.countChip(isActive, meta)}
+                    />
+                  }
+                  sx={theme.statusTab.button(isActive, meta)}
+                >
+                  {meta?.label ?? tab}
+                </AppButton>
+              );
+            })}
+          </Stack>
+          {statusToolbarEnd ? (
+            <Box sx={{ flexShrink: 0, display: "flex", alignItems: "center", ml: { xs: 0, sm: "auto" } }}>{statusToolbarEnd}</Box>
+          ) : null}
         </Stack>
       ) : null}
 
       <Box sx={theme.sections.filterContainer}>
         <Stack {...theme.sections.filterStack}>
-          <TextField
-            size="small"
-            placeholder={searchPlaceholder}
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchRoundedIcon sx={theme.inputs.startIcon.search} />
-                </InputAdornment>
-              ),
-            }}
-            sx={theme.inputs.search}
-          />
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: { sm: 1 }, minWidth: { xs: "100%", sm: 260 } }}>
+            <TextField
+              size="small"
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRoundedIcon sx={theme.inputs.startIcon.search} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ ...theme.inputs.search, flex: 1, minWidth: 0 }}
+            />
+            {searchBarEnd}
+          </Stack>
 
           {filterFields.map(({ field, label, minWidth, options }) => (
             <TextField
@@ -191,6 +208,7 @@ const BatchListShell = ({
             <Typography sx={theme.results.text}>{resultText}</Typography>
           </Box>
         </Stack>
+        {filterExtension}
       </Box>
 
       {loading && !hasItems ? (

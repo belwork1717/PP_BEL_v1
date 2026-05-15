@@ -61,7 +61,7 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     () => [
       {
         key: "batchId",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_BATCH_ID,
+        label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_CASING_ID,
         render: (v: string) => <Typography sx={theme.batchList.batchIdText}>{v}</Typography>,
       },
       {
@@ -136,8 +136,8 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
       columns={COLUMNS}
       statusField="rmStatus"
       statusConfig={statusConfig}
-      filters={[{ field: "priority", options: ["Critical", "High", "Medium", "Low"] }]}
-      searchFields={["batchId", "motorId"]}
+      filters={[]}
+      searchFields={["batchId", "motorId", "motorCasingId"]}
       highlightRow={(row: any) => row.rmStatus === OPERATION_STATUS.REJECTED}
       highlightColor={theme.palette.danger}
       rowsPerPageOptions={rowsPerPageOptions}

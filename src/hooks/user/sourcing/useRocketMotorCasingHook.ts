@@ -5,7 +5,7 @@ import { useUserBatchRefreshStore } from "../../../app/store/userBatchRefreshSto
 import { STRINGS } from "../../../app/config/strings";
 import rocketMotorCasingController from "../../../controllers/user/sourcing/rocketMotorCasingController";
 import {
-  mapRocketFormToCasingPayload,
+  buildRocketMotorCasingSectionsPayload,
   RocketMotorCasingDetailsModel,
 } from "../../../data/models/user/RocketMotorCasingProcurementModel";
 import useDimensionalParametersHook from "../useDimensionalParametersHook";
@@ -15,7 +15,8 @@ import {
   RocketMotorBatch,
   SOURCING_STATUS,
 } from "./sourcingWorkflowData";
-import { useSubdepartmentBatches } from "../useSubdepartmentBatches";
+import { useRocketMotorCasingList } from "./useRocketMotorCasingList";
+import { OPERATION_STATUS } from "../../operationStatus";
 
 type WorkflowView = "list" | "form";
 
@@ -43,6 +44,13 @@ const serializeForm = (formData: RocketFormData) => {
   });
 };
 
+/** True when first save must use POST /form/create (no server ids yet). */
+const shouldUseCreateEndpoint = (batch: RocketMotorBatch | null) => {
+  if (!batch) return false;
+  const noIds = !String(batch.procurementId ?? "").trim() && !String(batch.formId ?? "").trim();
+  return batch.rmStatus === OPERATION_STATUS.INITIATED && noIds;
+};
+
 export const useRocketMotorCasingHook = () => {
   const [view, setView] = useState<WorkflowView>("list");
   const [activeBatch, setActiveBatch] = useState<RocketMotorBatch | null>(null);
@@ -55,10 +63,9 @@ export const useRocketMotorCasingHook = () => {
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const [dimensionalParameters, setDimensionalParameters] = useState<any[]>([]);
   const [dimensionalParametersErrorMessage, setDimensionalParametersErrorMessage] = useState("");
-  
-  // Mapping API subdepartment dynamically via user routing slug
-  const listParams = useSubdepartmentBatches("rocket-motor");
-  
+
+  const listParams = useRocketMotorCasingList();
+
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [draftConfirm, setDraftConfirm] = useState(false);
 
@@ -68,9 +75,7 @@ export const useRocketMotorCasingHook = () => {
   const { fetchDimensionalParameters, isLoading: isDimensionalParamsLoading } = useDimensionalParametersHook();
 
   const subDepartmentId = useMemo(
-    () =>
-      user?.allSubDepartments.find((sd) => sd.slugs?.subDept === "rocket-motor")
-        ?.subDepartmentId,
+    () => user?.allSubDepartments.find((sd) => sd.slugs?.subDept === "rocket-motor")?.subDepartmentId,
     [user]
   );
 
@@ -99,9 +104,7 @@ export const useRocketMotorCasingHook = () => {
     if (!params.length) return currentRows ?? [];
 
     const existingByParamId = new Map(
-      (currentRows ?? [])
-        .filter((row: any) => row?.paramId)
-        .map((row: any) => [row.paramId, row])
+      (currentRows ?? []).filter((row: any) => row?.paramId).map((row: any) => [row.paramId, row])
     );
 
     return params.map((param: any, idx: number) => {
@@ -124,6 +127,10 @@ export const useRocketMotorCasingHook = () => {
   };
 
   const resolveCasingErrorMessage = (response: any, fallback: string) => {
+    const apiErr = response?.error as { details?: string; code?: string } | string | null | undefined;
+    const fromDetails =
+      apiErr && typeof apiErr === "object" && apiErr.details != null ? String(apiErr.details) : null;
+
     if (response?.statusCode === 409 && response?.errorCode === "FORM_ALREADY_EXISTS") {
       return STRINGS.SOURCING.CASING_FORM.FORM_ALREADY_EXISTS;
     }
@@ -136,7 +143,8 @@ export const useRocketMotorCasingHook = () => {
     if (response?.statusCode === 404 && response?.errorCode === "FORM_NOT_FOUND") {
       return STRINGS.SOURCING.CASING_FORM.FORM_NOT_FOUND;
     }
-    return response?.message || fallback;
+
+    return fromDetails || response?.message || fallback;
   };
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -160,26 +168,31 @@ export const useRocketMotorCasingHook = () => {
     const shouldFetchDetails =
       editMode ||
       batch.rmStatus === SOURCING_STATUS.IN_PROGRESS ||
-      batch.rmStatus === SOURCING_STATUS.REJECTED;
+      batch.rmStatus === SOURCING_STATUS.REJECTED ||
+      batch.rmStatus === SOURCING_STATUS.WAITING_FOR_APPROVAL;
 
     let resolvedFormData = getStartingFormData(batch);
     let resolvedBatch = { ...batch };
 
-    if (shouldFetchDetails) {
-      if (!subDepartmentId) {
-        showAlert(STRINGS.SOURCING.CASING_FORM.SUB_DEPARTMENT_MISSING, "error");
-        return;
-      }
+    if (!shouldFetchDetails) {
+      resolvedFormData = {
+        ...resolvedFormData,
+        motorCasingId: String(batch.motorCasingId ?? resolvedFormData.motorCasingId ?? ""),
+        motorStageApi: String(batch.motorStage ?? resolvedFormData.motorStageApi ?? ""),
+        motorNoApi: String(batch.motorNo ?? resolvedFormData.motorNoApi ?? ""),
+      };
+    }
 
-      if (!batch.formId) {
+    if (shouldFetchDetails) {
+      const motorCasingId = String(batch.motorCasingId ?? "").trim();
+      if (!motorCasingId) {
         showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
         return;
       }
 
       setLoadingFormDetails(true);
       const detailsResponse = await rocketMotorCasingController.fetchFormDetails({
-        formId: batch.formId,
-        subDepartmentId,
+        motorCasingId,
       });
       setLoadingFormDetails(false);
 
@@ -192,11 +205,14 @@ export const useRocketMotorCasingHook = () => {
         return;
       }
 
-      resolvedFormData = RocketMotorCasingDetailsModel.toFormData(detailsResponse.data);
+      const detailsModel = detailsResponse.data as RocketMotorCasingDetailsModel;
+      resolvedFormData = RocketMotorCasingDetailsModel.toFormData(detailsModel);
       resolvedBatch = {
         ...resolvedBatch,
-        formId: detailsResponse.data.formId || resolvedBatch.formId,
-        motorType: detailsResponse.data.motorType || resolvedBatch.motorType,
+        motorCasingId: detailsModel.motorCasingId || resolvedBatch.motorCasingId,
+        motorStage: detailsModel.motorStage || resolvedBatch.motorStage,
+        motorNo: detailsModel.motorNo || resolvedBatch.motorNo,
+        motorType: detailsModel.motorStage || resolvedBatch.motorType,
         draftData: resolvedFormData,
       };
     }
@@ -245,37 +261,41 @@ export const useRocketMotorCasingHook = () => {
       return false;
     }
 
-    const casingDetails = mapRocketFormToCasingPayload(formData, activeBatch.motorType || "");
-    const isCreateFlow = activeBatch.rmStatus === SOURCING_STATUS.INITIATED && !activeBatch.formId;
+    const motorCasingId = String(formData.motorCasingId || activeBatch.motorCasingId || "").trim();
+    const motorStage = String(formData.motorStageApi || activeBatch.motorStage || activeBatch.motorType || "").trim();
+    const motorNo = String(formData.motorNoApi || activeBatch.motorNo || "").trim();
+
+    if (!motorCasingId) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.BATCH_ID_MISSING, "error");
+      return false;
+    }
+    if (!motorStage || !motorNo) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.NOT_READY_TO_SUBMIT, "warning");
+      return false;
+    }
+
+    const isCreateFlow = shouldUseCreateEndpoint(activeBatch);
+    const sections = buildRocketMotorCasingSectionsPayload(formData, dimensionalParameters, {
+      includeVisualInspection: !isCreateFlow,
+    });
+
+    const basePayload = {
+      subDepartmentId,
+      motorStage,
+      motorNo,
+      motorCasingId,
+      formSubmissionType: (intent === "draft" ? "DRAFT" : "SUBMIT") as "DRAFT" | "SUBMIT",
+      sections,
+    };
 
     setActionLoading(true);
     try {
       let response;
 
       if (isCreateFlow) {
-        if (!activeBatch.batchId) {
-          showAlert(STRINGS.SOURCING.CASING_FORM.BATCH_ID_MISSING, "error");
-          return false;
-        }
-
-        response = await rocketMotorCasingController.createForm({
-          batchId: activeBatch.batchId,
-          subDepartmentId,
-          formSubmissionType: intent === "draft" ? "DRAFT" : "SUBMIT",
-          casingDetails,
-        });
+        response = await rocketMotorCasingController.createForm(basePayload);
       } else {
-        if (!activeBatch.formId) {
-          showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
-          return false;
-        }
-
-        response = await rocketMotorCasingController.updateForm({
-          formId: activeBatch.formId,
-          subDepartmentId,
-          formSubmissionType: intent === "draft" ? "DRAFT" : "UPDATE",
-          casingDetails,
-        });
+        response = await rocketMotorCasingController.updateForm(basePayload);
       }
 
       if (!response?.success) {
@@ -286,8 +306,24 @@ export const useRocketMotorCasingHook = () => {
         return false;
       }
 
-      const nextFormId = response.data?.formId ?? activeBatch.formId ?? null;
-      setActiveBatch((prev) => (prev ? { ...prev, formId: nextFormId, draftData: formData } : prev));
+      const data = response.data;
+      const nextFormId = data?.formId ?? activeBatch.formId ?? null;
+      const nextProcurementId = data?.procurementId ?? activeBatch.procurementId ?? null;
+      const nextStatus = data?.status ?? activeBatch.rmStatus;
+
+      setActiveBatch((prev) =>
+        prev
+          ? {
+              ...prev,
+              formId: nextFormId,
+              procurementId: nextProcurementId,
+              motorCasingId: data?.motorCasingId || prev.motorCasingId,
+              nextStep: data?.nextStep ?? prev.nextStep,
+              rmStatus: nextStatus ? (nextStatus as typeof prev.rmStatus) : prev.rmStatus,
+              draftData: formData,
+            }
+          : prev
+      );
       setInitialSnapshot(serializeForm(formData));
 
       if (intent === "draft") {
@@ -344,7 +380,7 @@ export const useRocketMotorCasingHook = () => {
     dimensionalParametersErrorMessage,
     isDimensionalParamsLoading,
     backConfirmOpen,
-    ...listParams, // provides batches, totalRecords, page, etc.
+    ...listParams,
     submitConfirm,
     draftConfirm,
     setSubmitConfirm,

@@ -52,7 +52,7 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				border: `1px solid ${allFilled ? alpha(palette.accent, 0.25) : alpha(palette.warn, 0.3)}`,
 			}),
 			removeIconButton: { color: palette.danger, "&:hover": { background: alpha(palette.danger, 0.08) } },
-			lotField: { minWidth: 130, "& .MuiInputBase-input": { fontSize: "0.78rem", padding: "5px 10px" } },
+			lotField: { minWidth: 0 },
 			specText: { fontSize: "0.8rem", color: palette.text, fontWeight: 500 },
 			refRangeChip: {
 				mt: { xs: 1.5, md: 0 },
@@ -63,8 +63,17 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				color: palette.warn,
 				border: `1px solid ${alpha(palette.warn, 0.3)}`,
 			},
-			analyzedField: { width: 120, "& .MuiInputBase-input": { fontSize: "0.78rem", padding: "5px 10px" } },
-			remarksField: { width: 200, "& .MuiInputBase-input": { fontSize: "0.78rem", padding: "4px 8px", lineHeight: 1.5 } },
+			analyzedField: {
+				maxWidth: 160,
+				"& input[type=number]": {
+					MozAppearance: "textfield",
+				},
+				"& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button": {
+					WebkitAppearance: "none",
+					margin: 0,
+				},
+			},
+			remarksField: { minWidth: 0 },
 			editModeBanner: {
 				mb: 2.5,
 				px: 2,

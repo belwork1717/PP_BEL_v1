@@ -263,6 +263,90 @@ const CasingDetailsForm = ({
       </Stack>
 
       <Box sx={theme.workflow.formElements.sectionBlock(sectionColors.motorId)}>
+        <SectionHeader icon={BadgeRoundedIcon} label={S.API_IDENTIFICATION} color={sectionColors.motorId} theme={theme} />
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mt: 1 }}>
+          <Box flex={1.2}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.MOTOR_CASING_ID}</Typography>
+            <FormInput
+              size="small"
+              name="motorCasingId"
+              value={formData.motorCasingId}
+              onChange={onChange}
+              placeholder={S.MOTOR_CASING_ID_PH}
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+          <Box flex={0.6}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.MOTOR_STAGE}</Typography>
+            <FormInput
+              size="small"
+              name="motorStageApi"
+              value={formData.motorStageApi}
+              onChange={onChange}
+              placeholder={S.MOTOR_STAGE_PH}
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+          <Box flex={0.6}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.MOTOR_NO}</Typography>
+            <FormInput
+              size="small"
+              name="motorNoApi"
+              value={formData.motorNoApi}
+              onChange={onChange}
+              placeholder={S.MOTOR_NO_PH}
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box sx={theme.workflow.formElements.sectionBlock(sectionColors.motorId)}>
+        <SectionHeader icon={AssignmentRoundedIcon} label={S.ITEMS_RECEIVED} color={sectionColors.motorId} theme={theme} />
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mt: 1 }}>
+          <Box flex={1.2}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.ITEMS_DESCRIPTION}</Typography>
+            <FormInput
+              size="small"
+              name="itemsDescription"
+              value={formData.itemsDescription}
+              onChange={onChange}
+              placeholder={S.MOTOR_ID_PH}
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+          <Box flex={1}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.ITEMS_DIMENSION}</Typography>
+            <FormInput
+              size="small"
+              name="itemsDimension"
+              value={formData.itemsDimension}
+              onChange={onChange}
+              placeholder="e.g. 140 x 2200"
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+          <Box flex={0.5}>
+            <Typography sx={theme.workflow.formElements.fieldLabel}>{S.ITEMS_UNIT}</Typography>
+            <FormInput
+              size="small"
+              name="itemsUnit"
+              value={formData.itemsUnit}
+              onChange={onChange}
+              placeholder="mm"
+              label={undefined}
+              sx={theme.workflow.formElements.textField}
+            />
+          </Box>
+        </Stack>
+      </Box>
+
+      <Box sx={theme.workflow.formElements.sectionBlock(sectionColors.motorId)}>
         <SectionHeader icon={BadgeRoundedIcon} label={S.MOTOR_ID} color={sectionColors.motorId} theme={theme} />
         <DRRow
           detailsName="motorIdDetails"
@@ -312,13 +396,19 @@ const CasingDetailsForm = ({
 
       <Box sx={theme.workflow.formElements.sectionBlock(sectionColors.visual)}>
         <SectionHeader icon={VisibilityRoundedIcon} label={S.VISUAL_OBS} color={sectionColors.clearance} theme={theme} />
-        <MediaUpload
-          value={formData.mediaFilePath}
-          onChange={onMediaChange}
-          label={S.VISUAL_OBS}
-          description={S.VISUAL_OBS_DESC}
-          accept="image/*,video/*"
-        />
+        {typeof formData.mediaFilePath === "string" && formData.mediaFilePath ? (
+          <Typography sx={{ fontSize: "0.82rem", color: theme.palette.textSub, px: 0.5, py: 1 }}>
+            {S.MEDIA_ON_FILE_PREFIX} {formData.mediaFilePath}
+          </Typography>
+        ) : (
+          <MediaUpload
+            value={typeof formData.mediaFilePath === "object" ? formData.mediaFilePath : null}
+            onChange={onMediaChange}
+            label={S.VISUAL_OBS}
+            description={S.VISUAL_OBS_DESC}
+            accept="image/*,video/*"
+          />
+        )}
       </Box>
 
       <Box sx={theme.workflow.formElements.sectionBlock(sectionColors.dimensional)}>

@@ -22,6 +22,8 @@ type UserWorkflowStatusActionProps = {
   editTooltip?: string;
   waitingLabel?: string;
   approvedLabel?: string;
+  /** When true, "Continue" uses the same prominent contained style as the fill action */
+  continueUsesPrimaryStyle?: boolean;
 };
 
 const UserWorkflowStatusAction = ({
@@ -37,6 +39,7 @@ const UserWorkflowStatusAction = ({
   editTooltip = "Load previously submitted data",
   waitingLabel = "Awaiting Approver",
   approvedLabel = "Approved",
+  continueUsesPrimaryStyle = false,
 }: UserWorkflowStatusActionProps) => {
   switch (status) {
     case statusMap.INITIATED:
@@ -55,11 +58,11 @@ const UserWorkflowStatusAction = ({
     case statusMap.IN_PROGRESS:
       return (
         <Button
-          variant="outlined"
+          variant={continueUsesPrimaryStyle ? "contained" : "outlined"}
           size="small"
           endIcon={<ArrowForwardRoundedIcon sx={{ fontSize: "14px !important" }} />}
           onClick={() => onFillForm(row)}
-          sx={theme.batchList.action.secondary}
+          sx={continueUsesPrimaryStyle ? theme.batchList.action.primary : theme.batchList.action.secondary}
         >
           {continueLabel}
         </Button>

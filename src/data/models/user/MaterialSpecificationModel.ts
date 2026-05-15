@@ -14,8 +14,18 @@ export class MaterialSpecificationItemModel {
     specificationName?: string;
     referenceRange?: Partial<ReferenceRangeModel>;
   }) {
-    this.specificationCode = payload.specificationCode ?? "";
-    this.specificationName = payload.specificationName ?? "";
+    const raw = payload as Record<string, unknown>;
+    this.specificationCode = String(
+      payload.specificationCode ??
+        raw.specCode ??
+        raw.code ??
+        raw.specification_code ??
+        raw.specificationId ??
+        ""
+    ).trim();
+    this.specificationName = String(
+      payload.specificationName ?? raw.specification_name ?? raw.name ?? ""
+    ).trim();
     this.referenceRange = {
       minValue: payload.referenceRange?.minValue ?? null,
       maxValue: payload.referenceRange?.maxValue ?? null,
@@ -54,10 +64,16 @@ export class MaterialSpecificationListModel {
 
   static fromApi(apiResponse: any): MaterialSpecificationListModel {
     const data = apiResponse?.data ?? {};
-    const specs = Array.isArray(data?.specifications) ? data.specifications : [];
+    const specs = Array.isArray(data?.specifications)
+      ? data.specifications
+      : Array.isArray((data as any)?.specificationList)
+        ? (data as any).specificationList
+        : Array.isArray(apiResponse?.specifications)
+          ? apiResponse.specifications
+          : [];
 
     return new MaterialSpecificationListModel({
-      materialCode: data?.materialCode ?? "",
+      materialCode: data?.materialCode ?? apiResponse?.materialCode ?? "",
       specifications: specs.map((item: any) => new MaterialSpecificationItemModel(item)),
     });
   }

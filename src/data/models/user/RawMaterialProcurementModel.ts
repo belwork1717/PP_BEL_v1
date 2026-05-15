@@ -408,6 +408,19 @@ export function createEmptyFormBatch(): RawMaterialFormBatch {
   };
 }
 
+/**
+ * Temporary placeholder until real file-upload API returns URLs.
+ * Preserves real `fileName` and `certificateType` in the payload; only `fileUrl` is substituted for uploads.
+ */
+export const RAW_MATERIAL_CERTIFICATE_PLACEHOLDER_FILE_URL =
+  "https://example.invalid/raw-material-procurement/certificate-upload-pending";
+
+export function certificateFileUrlForApi(cert: LotCertificate): string {
+  const url = String(cert.fileUrl ?? "").trim();
+  if (/^https?:\/\//i.test(url)) return url;
+  return RAW_MATERIAL_CERTIFICATE_PLACEHOLDER_FILE_URL;
+}
+
 export function mapBlocksToCreateMaterials(blocks: MaterialBlock[]): RawMaterialMaterialCreatePayload[] {
   const byMaterial = new Map<string, MaterialBlock[]>();
   for (const b of blocks ?? []) {
@@ -437,7 +450,18 @@ export function mapBlocksToCreateMaterials(blocks: MaterialBlock[]): RawMaterial
             isOutOfRange: Boolean(row.isOutOfRange),
             remarks: row.remarks ?? "",
           })),
-        certificates: block.certificates ?? [],
+        certificates: (block.certificates ?? [])
+          .filter(
+            (c) =>
+              String(c.fileUrl ?? "").trim().length > 0 ||
+              String(c.fileName ?? "").trim().length > 0 ||
+              String(c.certificateType ?? "").trim().length > 0
+          )
+          .map((c) => ({
+            fileName: String(c.fileName ?? "").trim(),
+            certificateType: String(c.certificateType ?? "").trim(),
+            fileUrl: certificateFileUrlForApi(c),
+          })),
       })),
     };
   });
@@ -474,7 +498,18 @@ export function mapFirstBlockToLotUpdatePayload(
         remarks: row.remarks ?? "",
         status: null,
       })),
-    certificates: block.certificates ?? [],
+    certificates: (block.certificates ?? [])
+      .filter(
+        (c) =>
+          String(c.fileUrl ?? "").trim().length > 0 ||
+          String(c.fileName ?? "").trim().length > 0 ||
+          String(c.certificateType ?? "").trim().length > 0
+      )
+      .map((c) => ({
+        fileName: String(c.fileName ?? "").trim(),
+        certificateType: String(c.certificateType ?? "").trim(),
+        fileUrl: certificateFileUrlForApi(c),
+      })),
   };
 }
 

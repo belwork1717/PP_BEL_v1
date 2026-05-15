@@ -7,6 +7,23 @@ export const SOURCING_STATUS = OPERATION_STATUS;
 export type SourcingStatus = (typeof SOURCING_STATUS)[keyof typeof SOURCING_STATUS];
 
 export type RocketFormData = {
+  /** Shown / edited for create; filled from list + details for edit */
+  motorCasingId: string;
+  motorStageApi: string;
+  motorNoApi: string;
+  casingType: string;
+  receivingDate: string;
+  itemsDescription: string;
+  itemsDimension: string;
+  itemsUnit: string;
+  greenCardNo: string;
+  clearanceAuthority: string;
+  clearanceStatus: string;
+  insulationType: string;
+  insulationReportNo: string;
+  weightWithoutHarness: string;
+  weightWithHarness: string;
+  calibrationRef: string;
   motorIdDetails: string;
   motorIdRemarks: string;
   motorClearanceDetails: string;
@@ -23,13 +40,21 @@ export type RocketFormData = {
   utNdtRemarks: string;
   waiversDetails: string;
   waiversRemarks: string;
-  mediaFilePath: File | null;
+  mediaFilePath: File | string | null;
   dimensionalData: Array<Record<string, any>>;
 };
 
 export type RocketMotorBatch = {
-  id: number;
+  id: number | string;
   formId?: string | null;
+  procurementId?: string | null;
+  motorCasingId?: string;
+  motorStage?: string;
+  motorNo?: string;
+  casingType?: string;
+  insulationType?: string;
+  receivingDate?: string;
+  nextStep?: string | null;
   batchId: string;
   batchType: string;
   motorId: string;
@@ -43,6 +68,22 @@ export type RocketMotorBatch = {
 };
 
 export const INITIAL_ROCKET_FORM: RocketFormData = {
+  motorCasingId: "",
+  motorStageApi: "",
+  motorNoApi: "",
+  casingType: "COMPOSITE",
+  receivingDate: "",
+  itemsDescription: "",
+  itemsDimension: "",
+  itemsUnit: "mm",
+  greenCardNo: "",
+  clearanceAuthority: "",
+  clearanceStatus: "RECEIVED",
+  insulationType: "ROCASIN",
+  insulationReportNo: "",
+  weightWithoutHarness: "",
+  weightWithHarness: "",
+  calibrationRef: "",
   motorIdDetails: "",
   motorIdRemarks: "",
   motorClearanceDetails: "",

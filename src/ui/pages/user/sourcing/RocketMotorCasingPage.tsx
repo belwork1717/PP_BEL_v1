@@ -75,7 +75,12 @@ const RocketMotorCasing = () => {
 
               <UserWorkflowActionBar
                 isEdit={isEditMode}
-                canSubmit={Boolean(formData.motorIdDetails?.trim() && formData.motorClearanceDetails?.trim())}
+                canSubmit={Boolean(
+                  String(formData.motorCasingId ?? "").trim() &&
+                    String(formData.motorStageApi || activeBatch.motorStage || "").trim() &&
+                    String(formData.motorNoApi || activeBatch.motorNo || "").trim() &&
+                    String(formData.itemsDescription ?? "").trim()
+                )}
                 readinessText={STRINGS.SOURCING.CASING_FORM.READY_TO_SUBMIT}
                 pendingText={STRINGS.SOURCING.CASING_FORM.NOT_READY_TO_SUBMIT}
                 helperText={STRINGS.SOURCING.CASING_FORM.ACTION_HELPER}

@@ -128,7 +128,15 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
               value={selectedMaterial}
               onChange={(event) => setSelectedMaterial(event.target.value)}
               sx={theme.workflow.formElements.textField}
-              SelectProps={{ displayEmpty: true, IconComponent: ExpandMoreRoundedIcon }}
+              SelectProps={{
+                displayEmpty: true,
+                IconComponent: ExpandMoreRoundedIcon,
+                MenuProps: {
+                  PaperProps: {
+                    sx: { borderRadius: 2, mt: 0.5, boxShadow: `0 8px 24px ${theme.palette.mode === "dark" ? "rgba(0,0,0,0.45)" : "rgba(27,79,114,0.12)"}` },
+                  },
+                },
+              }}
               disabled={loadingMaterials}
               InputProps={{
                 startAdornment: (

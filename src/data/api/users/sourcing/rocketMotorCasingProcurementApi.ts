@@ -1,17 +1,31 @@
 import { post, put } from "../../httpClient";
 import { USER_ROCKET_MOTOR_CASING_ENDPOINTS } from "../../endPoints";
 
-export const createRocketMotorCasingFormApi = async (payload: any) => {
+export type RocketMotorCasingListRequest = {
+  subDepartmentId: number;
+  page: number;
+  limit: number;
+  status?: string[];
+  motorStage?: string[];
+  casingType?: string[];
+  insulationType?: string[];
+  search?: string;
+  fromDate?: string;
+  toDate?: string;
+};
+
+export const createRocketMotorCasingFormApi = async (payload: Record<string, unknown>) => {
   return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.CREATE_FORM, payload);
 };
 
-export const fetchRocketMotorCasingFormDetailsApi = async (payload: {
-  formId: string;
-  subDepartmentId: number;
-}) => {
+export const fetchRocketMotorCasingFormDetailsApi = async (payload: { motorCasingId: string }) => {
   return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.FORM_DETAILS, payload);
 };
 
-export const updateRocketMotorCasingFormApi = async (payload: any) => {
+export const updateRocketMotorCasingFormApi = async (payload: Record<string, unknown>) => {
   return await put(USER_ROCKET_MOTOR_CASING_ENDPOINTS.UPDATE_FORM, payload);
+};
+
+export const fetchRocketMotorCasingListApi = async (payload: RocketMotorCasingListRequest) => {
+  return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.CASING_LIST, payload);
 };

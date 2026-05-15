@@ -9,6 +9,8 @@ export class ApiResponseModel<T = any> {
   statusCode: number;
   message: string;
   errorCode: string | null;
+  /** Original API `error` object (e.g. `{ code, details }`) when present */
+  error: unknown;
   timestamp?: string;
   data: T | null;
 
@@ -18,6 +20,7 @@ export class ApiResponseModel<T = any> {
       this.statusCode = 500;
       this.message = STRINGS.SYSTEM.SERVER_ERROR;
       this.errorCode = "UNKNOWN_ERROR";
+      this.error = null;
       this.data = null;
       return;
     }
@@ -28,13 +31,20 @@ export class ApiResponseModel<T = any> {
       this.statusCode = apiResponse.status || apiResponse.statusCode || 500;
       this.message = apiResponse.message || STRINGS.SYSTEM.SERVER_ERROR;
       this.errorCode = apiResponse.details?.errorCode || apiResponse.details || "INTERNAL_SERVER_ERROR";
+      this.error = apiResponse.details ?? null;
       this.data = null;
     } else {
       // Direct API response
       this.success = apiResponse.success ?? false;
       this.statusCode = apiResponse.statusCode ?? (this.success ? 200 : 400);
       this.message = apiResponse.message ?? (this.success ? "Success" : "Failed");
-      this.errorCode = apiResponse.error ?? null;
+      this.error = apiResponse.error ?? null;
+      this.errorCode =
+        typeof apiResponse.error === "object" && apiResponse.error && "code" in apiResponse.error
+          ? String((apiResponse.error as { code: unknown }).code)
+          : typeof apiResponse.error === "string"
+            ? apiResponse.error
+            : null;
       this.timestamp = apiResponse.timestamp ?? undefined;
       
       let parsedData = apiResponse.data ?? null;

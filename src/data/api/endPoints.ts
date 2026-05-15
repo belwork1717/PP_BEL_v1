@@ -191,7 +191,7 @@ export const SYSTEM_MANAGER = {
 // =============================
 export const USER_OPERATIONS_ENDPOINTS = {
   BATCH_LIST: `${API_BASE}/user/subdepartment/batch-list`,
-  LOT_LIST: `${API_BASE}/user/subdepartment/lot-list`,
+  LOT_LIST: `${API_BASE}/user/raw-material-procurement/form/lot-list`,
   MATERIALS_LIST: `${API_BASE}/user/subdepartment/materials-list`,
   MATERIAL_SPECIFICATION_LIST: `${API_BASE}/user/subdepartment/materials/specification-list`,
   DIMENSIONAL_PARAMETERS_LIST: `${API_BASE}/user/subdepartment/dimensional/parameters-list`,
@@ -208,6 +208,7 @@ export const USER_ROCKET_MOTOR_CASING_ENDPOINTS = {
   CREATE_FORM: `${API_BASE}/user/rocket-motor-casing/form/create`,
   FORM_DETAILS: `${API_BASE}/user/rocket-motor-casing/form/details`,
   UPDATE_FORM: `${API_BASE}/user/rocket-motor-casing/form/update`,
+  CASING_LIST: `${API_BASE}/user/subdepartment/rocket-motor-casing/list`,
 };
 
 export const USER_RAW_MATERIAL_PREPARATION_ENDPOINTS = {

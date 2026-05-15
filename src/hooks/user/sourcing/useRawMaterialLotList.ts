@@ -1,10 +1,42 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { STRINGS } from "../../../app/config/strings";
 import { useAuthStore } from "../../../app/store/authStore";
 import { useUserBatchRefreshStore } from "../../../app/store/userBatchRefreshStore";
+import { operationsController } from "../../../controllers/user/operationsController";
 import rawMaterialProcurementController from "../../../controllers/user/sourcing/rawMaterialProcurementController";
 import { OPERATION_STATUS } from "../../operationStatus";
 import { mapLotListApiRow, RawMaterialLotListRequest } from "../../../data/models/user/RawMaterialProcurementModel";
+
+const FILTER_ALL = STRINGS.USER_BATCH_LIST.FILTER_ALL;
+
+export type SubdeptMaterialOption = {
+  materialCode: string;
+  materialName: string;
+};
+
+export type RawMaterialLotListAdvancedFilters = {
+  materialCodes: string[];
+  manufacturer: string;
+  fromDate: string;
+  toDate: string;
+};
+
+const emptyAdvanced: RawMaterialLotListAdvancedFilters = {
+  materialCodes: [],
+  manufacturer: "",
+  fromDate: "",
+  toDate: "",
+};
+
+const normalizeMaterialsList = (data: unknown): SubdeptMaterialOption[] => {
+  const raw = Array.isArray(data) ? data : (data as { materials?: unknown[]; items?: unknown[] })?.materials ?? (data as { items?: unknown[] })?.items ?? [];
+  return raw
+    .map((m: Record<string, unknown>) => ({
+      materialCode: String(m?.materialCode ?? m?.code ?? ""),
+      materialName: String(m?.materialName ?? m?.name ?? ""),
+    }))
+    .filter((m) => m.materialCode);
+};
 
 const mapLotListStatusCountsForUi = (
   server: Record<string, number> | undefined,
@@ -48,8 +80,16 @@ export const useRawMaterialLotList = () => {
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const [search, setSearch] = useState<string>("");
   const [debouncedSearch, setDebouncedSearch] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>(STRINGS.USER_BATCH_LIST.FILTER_ALL);
+  const [statusFilter, setStatusFilterState] = useState<string>(FILTER_ALL);
   const [totalRecords, setTotalRecords] = useState<number>(0);
+  const [advancedFilters, setAdvancedFilters] = useState<RawMaterialLotListAdvancedFilters>(emptyAdvanced);
+  const [materialOptions, setMaterialOptions] = useState<SubdeptMaterialOption[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+
+  const setStatusFilter = useCallback((value: string) => {
+    setStatusFilterState(value);
+    setPage(0);
+  }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -58,6 +98,61 @@ export const useRawMaterialLotList = () => {
     }, 500);
     return () => clearTimeout(handler);
   }, [search]);
+
+  useEffect(() => {
+    let active = true;
+    const loadMaterials = async () => {
+      if (!subDepartmentId) {
+        setMaterialOptions([]);
+        return;
+      }
+      setMaterialsLoading(true);
+      try {
+        const res = await operationsController.fetchMaterialsList();
+        if (!active) return;
+        if (res?.success && res.data != null) {
+          setMaterialOptions(normalizeMaterialsList(res.data));
+        } else {
+          setMaterialOptions([]);
+        }
+      } catch {
+        if (active) setMaterialOptions([]);
+      } finally {
+        if (active) setMaterialsLoading(false);
+      }
+    };
+    void loadMaterials();
+    return () => {
+      active = false;
+    };
+  }, [subDepartmentId]);
+
+  const applyAdvancedFilters = useCallback((next: RawMaterialLotListAdvancedFilters & { status: string }) => {
+    setAdvancedFilters({
+      materialCodes: [...next.materialCodes],
+      manufacturer: next.manufacturer,
+      fromDate: next.fromDate,
+      toDate: next.toDate,
+    });
+    setStatusFilterState(next.status);
+    setPage(0);
+  }, []);
+
+  const clearAdvancedFilters = useCallback(() => {
+    setAdvancedFilters(emptyAdvanced);
+    setStatusFilterState(FILTER_ALL);
+    setPage(0);
+  }, []);
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (advancedFilters.materialCodes.length) n += 1;
+    if (advancedFilters.manufacturer.trim()) n += 1;
+    if (advancedFilters.fromDate) n += 1;
+    if (advancedFilters.toDate) n += 1;
+    if (statusFilter !== FILTER_ALL) n += 1;
+    return n;
+  }, [advancedFilters, statusFilter]);
 
   const fetchLots = useCallback(async () => {
     if (!subDepartmentId) {
@@ -76,9 +171,25 @@ export const useRawMaterialLotList = () => {
         payload.search = debouncedSearch.trim();
       }
 
-      if (statusFilter !== STRINGS.USER_BATCH_LIST.FILTER_ALL) {
+      if (statusFilter !== FILTER_ALL) {
         payload.status = [statusFilter];
       }
+
+      if (advancedFilters.materialCodes.length) {
+        payload.materialCode = advancedFilters.materialCodes;
+      }
+      if (advancedFilters.manufacturer.trim()) {
+        payload.manufacturerName = advancedFilters.manufacturer.trim();
+      }
+      let from = advancedFilters.fromDate;
+      let to = advancedFilters.toDate;
+      if (from && to && from > to) {
+        const swap = from;
+        from = to;
+        to = swap;
+      }
+      if (from) payload.fromDate = from;
+      if (to) payload.toDate = to;
 
       const res = await rawMaterialProcurementController.fetchLotList(payload);
 
@@ -102,7 +213,15 @@ export const useRawMaterialLotList = () => {
     } finally {
       setLoading(false);
     }
-  }, [subDepartmentId, page, rowsPerPage, debouncedSearch, statusFilter, refreshVersion]);
+  }, [
+    subDepartmentId,
+    page,
+    rowsPerPage,
+    debouncedSearch,
+    statusFilter,
+    advancedFilters,
+    refreshVersion,
+  ]);
 
   useEffect(() => {
     void fetchLots();
@@ -122,6 +241,12 @@ export const useRawMaterialLotList = () => {
     setSearch,
     setStatusFilter,
     refreshUserBatches: fetchLots,
+    materialOptions,
+    materialsLoading,
+    advancedFilters,
+    applyAdvancedFilters,
+    clearAdvancedFilters,
+    activeFilterCount,
   };
 };
 

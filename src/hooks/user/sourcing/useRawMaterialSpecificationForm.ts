@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { STRINGS } from "../../../app/config/strings";
 import { useAlertStore } from "../../../app/store/alertStore";
 import { useThemeStore } from "../../../app/store/themeStore";
@@ -170,14 +170,14 @@ export const useRawMaterialSpecificationForm = ({
     };
   }, [formStrings.MATERIALS_FETCH_ERROR, formStrings.MATERIALS_LOAD_FAILED, showAlert]);
 
-  useEffect(() => {
-    if (initialBlocks.length > 0) {
-      setBlocks((previous) => (previous === initialBlocks ? previous : initialBlocks));
-      return;
-    }
-
-    setBlocks((previous) => (previous.length === 0 ? previous : []));
+  /** Only hydrate from parent when parent has rows (e.g. opened lot / edit). Never clear local blocks when parent is still [] on create — that was wiping in‑progress materials. */
+  useLayoutEffect(() => {
+    if (initialBlocks.length === 0) return;
+    setBlocks((previous) => (previous === initialBlocks ? previous : initialBlocks));
   }, [initialBlocks]);
+
+  const blocksRef = useRef<SpecificationBlock[]>([]);
+  blocksRef.current = blocks;
 
   const updateBlocks = useCallback(
     (updater: SpecificationBlock[] | ((previous: SpecificationBlock[]) => SpecificationBlock[])) => {
@@ -256,13 +256,13 @@ export const useRawMaterialSpecificationForm = ({
 
   const handleConfirmDraft = useCallback(async () => {
     setDraftConfirm(false);
-    await onSaveDraft?.(blocks);
-  }, [blocks, onSaveDraft]);
+    await onSaveDraft?.(blocksRef.current);
+  }, [onSaveDraft]);
 
   const handleConfirmSubmit = useCallback(async () => {
     setSubmitConfirm(false);
-    await onSubmit?.(blocks);
-  }, [blocks, onSubmit]);
+    await onSubmit?.(blocksRef.current);
+  }, [onSubmit]);
 
   return {
     actionHelperText,

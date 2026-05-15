@@ -177,6 +177,7 @@ import ThermostatRoundedIcon from "@mui/icons-material/ThermostatRounded";
 import TimerRoundedIcon from "@mui/icons-material/TimerRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WaterRoundedIcon from "@mui/icons-material/WaterRounded";
@@ -552,6 +553,9 @@ export const icons = {
         send: SendRoundedIcon,
         warning: WarningAmberRoundedIcon,
         checkCircleOutline: CheckCircleOutlineRoundedIcon,
+        uploadFile: UploadFileRoundedIcon,
+        insertDriveFile: InsertDriveFileOutlinedIcon,
+        openInNew: OpenInNewRoundedIcon,
       },
       rawMaterialBatchList: {
         pending: HourglassEmptyRoundedIcon,

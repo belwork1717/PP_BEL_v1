@@ -129,6 +129,9 @@ const UserBatchList = ({
   onStatusFilterChange,
   statusCounts: serverStatusCounts,
   isLoading = false,
+  statusToolbarEnd,
+  searchBarEnd,
+  filterExtension,
 }: any) => {
   const [localSearch,       setLocalSearch]       = useState("");
   const [localStatusFilter, setLocalStatusFilter] = useState(STRINGS.USER_BATCH_LIST.FILTER_ALL);
@@ -445,9 +448,12 @@ const UserBatchList = ({
       resultText={`${STRINGS.USER_BATCH_LIST.SHOWING} ${Math.min(activeRowsPerPage, Math.max(0, displayTotal - activePage * activeRowsPerPage))} ${STRINGS.USER_BATCH_LIST.OF} ${displayTotal} ${STRINGS.USER_BATCH_LIST.RECORDS}${activeStatusFilter !== STRINGS.USER_BATCH_LIST.FILTER_ALL ? ` · ${statusConfig?.[activeStatusFilter]?.label ?? activeStatusFilter}` : ""}`}
       searchPlaceholder={STRINGS.USER_BATCH_LIST.SEARCH_PLACEHOLDER}
       searchValue={activeSearch}
+      searchBarEnd={searchBarEnd}
+      filterExtension={filterExtension}
       statusCounts={statusCounts}
       statusMeta={statusMeta}
       statusTabs={statusTabs}
+      statusToolbarEnd={statusToolbarEnd}
       theme={listShellTheme}
     >
       <Paper elevation={0} sx={{

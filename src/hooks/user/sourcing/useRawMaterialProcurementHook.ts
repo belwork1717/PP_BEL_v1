@@ -177,23 +177,21 @@ export const useRawMaterialProcurementHook = () => {
     });
 
     if (formEntryMode === "create") {
-      const materials = mapBlocksToCreateMaterials(blocks)
+      const mapped = mapBlocksToCreateMaterials(blocks);
+      const materials = mapped
         .map((mat) => ({
           ...mat,
-          lots: mat.lots.map((lot) => ({
-            ...lot,
-            specifications: lot.specifications.filter((s) => {
-              if (intent !== "draft") return Boolean(s.specificationCode);
-              return (
-                Boolean(s.specificationCode) &&
-                (s.analysedResult !== null || String(s.remarks ?? "").trim().length > 0)
-              );
-            }),
-          })),
-        }))
-        .map((mat) => ({
-          ...mat,
-          lots: mat.lots.filter((lot) => lot.lotId.trim() && lot.specifications.length > 0),
+          lots: mat.lots
+            .map((lot, lotIdx) => {
+              const trimmed = lot.lotId.trim();
+              const lotId =
+                trimmed ||
+                (intent === "draft" && lot.specifications.length > 0
+                  ? `DRAFT-${mat.materialCode}-${lotIdx + 1}`
+                  : "");
+              return { ...lot, lotId };
+            })
+            .filter((lot) => lot.lotId && lot.specifications.length > 0),
         }))
         .filter((mat) => mat.materialCode && mat.lots.length > 0);
 

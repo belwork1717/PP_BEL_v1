@@ -1,7 +1,14 @@
-import React, { useMemo } from "react";
-import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { alpha, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import dayjs from "dayjs";
 import { icons } from "../../../../../app/theme/icons";
 import IconText from "../../../../components/common/IconText";
+import FilterPanelHeader from "../../../../components/custom/FilterPanelHeader";
+import FilterToggleButton from "../../../../components/custom/FilterToggleButton";
 import UserBatchList from "../../../../components/custom/UserBatchList";
 import UserWorkflowStatusAction from "../../../../components/custom/UserWorkflowStatusAction";
 import UserWorkflowStatusCell from "../../../../components/custom/UserWorkflowStatusCell";
@@ -9,6 +16,7 @@ import { useThemeStore } from "../../../../../app/store/themeStore";
 import getSourcingTheme from "../../../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
 import { STRINGS } from "../../../../../app/config/strings";
+import type { RawMaterialLotListAdvancedFilters } from "../../../../../hooks/user/sourcing/useRawMaterialLotList";
 
 const {
   pending: HourglassEmptyRoundedIcon,
@@ -20,6 +28,8 @@ const {
   calendar: CalendarMonthRoundedIcon,
 } = icons.user.sourcing.rawMaterialBatchList;
 
+const FILTER_ALL = STRINGS.USER_BATCH_LIST.FILTER_ALL;
+
 export const OPERATION_STATUS_CONFIG = getOperationStatusConfig({
   initiated: HourglassEmptyRoundedIcon,
   inProgress: PlayCircleOutlineRoundedIcon,
@@ -28,8 +38,10 @@ export const OPERATION_STATUS_CONFIG = getOperationStatusConfig({
   rejected: CancelRoundedIcon,
 });
 
-const canShowEditButton = (status: string) =>
-  status === OPERATION_STATUS.INITIATED || status === OPERATION_STATUS.IN_PROGRESS;
+const STATUS_DROPDOWN_VALUES = [FILTER_ALL, ...Object.values(OPERATION_STATUS)] as const;
+
+/** Lot metadata edit — only for drafts not yet in workflow filling */
+const canShowEditLotButton = (status: string) => status === OPERATION_STATUS.INITIATED;
 
 const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
   const mode = useThemeStore((state) => state.mode);
@@ -51,7 +63,41 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     handleFillForm,
     handleEditLot,
     handleCreateLot,
+    materialOptions,
+    materialsLoading,
+    advancedFilters,
+    applyAdvancedFilters,
+    clearAdvancedFilters,
+    activeFilterCount,
   } = hookState;
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [draftMaterial, setDraftMaterial] = useState(FILTER_ALL);
+  const [draftManufacturer, setDraftManufacturer] = useState("");
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
+  const [draftStatus, setDraftStatus] = useState(FILTER_ALL);
+
+  const syncDraftsFromApplied = useCallback(() => {
+    setDraftMaterial(advancedFilters.materialCodes.length === 1 ? advancedFilters.materialCodes[0]! : FILTER_ALL);
+    setDraftManufacturer(advancedFilters.manufacturer);
+    setDraftFrom(advancedFilters.fromDate);
+    setDraftTo(advancedFilters.toDate);
+    setDraftStatus(statusFilter);
+  }, [advancedFilters, statusFilter]);
+
+  const filterWasOpen = useRef(false);
+  useEffect(() => {
+    if (filterOpen && !filterWasOpen.current) {
+      syncDraftsFromApplied();
+    }
+    filterWasOpen.current = filterOpen;
+  }, [filterOpen, syncDraftsFromApplied]);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    setDraftStatus(statusFilter);
+  }, [statusFilter, filterOpen]);
 
   const statusConfig = useMemo(
     () =>
@@ -59,6 +105,75 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         Object.entries(OPERATION_STATUS_CONFIG).map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
       ),
     [theme]
+  );
+
+  const filterToggleSx = useMemo(() => {
+    const pl = theme.palette.primaryLight;
+    const sub = theme.palette.textSub;
+    return {
+      filterBtn: (active: boolean) => ({
+        display: "flex",
+        alignItems: "center",
+        gap: 0.6,
+        cursor: "pointer",
+        flexShrink: 0,
+        px: 1.2,
+        py: 0.55,
+        borderRadius: 2,
+        border: `1px solid ${active ? pl : alpha(pl, 0.35)}`,
+        bgcolor: active ? alpha(pl, 0.1) : "transparent",
+        color: active ? pl : sub,
+        transition: "all 0.15s",
+        userSelect: "none",
+        "&:hover": {
+          bgcolor: alpha(pl, 0.08),
+          borderColor: pl,
+          color: pl,
+        },
+      }),
+      filterBtnText: { fontSize: "0.72rem", fontWeight: 700, lineHeight: 1 },
+      filterBtnIcon: { fontSize: 14 },
+      filterBtnChevron: { fontSize: 14, ml: 0.2 },
+      filterBadgePill: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: alpha(pl, 0.2),
+        color: pl,
+        borderRadius: "50%",
+        width: 16,
+        height: 16,
+        fontSize: "0.58rem",
+        fontWeight: 800,
+      },
+    };
+  }, [theme.palette.primaryLight, theme.palette.textSub]);
+
+  const filterPanelHeaderSx = useMemo(
+    () => ({
+      containerSx: { alignItems: "center", pb: 0.5 },
+      iconSx: { fontSize: 18, color: theme.palette.primaryLight },
+      labelSx: { fontSize: "0.82rem", fontWeight: 700, color: theme.palette.text },
+      badgeSx: {
+        minWidth: 20,
+        height: 20,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "0.65rem",
+        fontWeight: 800,
+        bgcolor: alpha(theme.palette.primaryLight, 0.15),
+        color: theme.palette.primaryLight,
+      },
+      clearChipSx: {
+        fontWeight: 700,
+        fontSize: "0.62rem",
+        borderColor: alpha(theme.palette.danger, 0.35),
+        color: theme.palette.danger,
+      },
+    }),
+    [theme.palette]
   );
 
   const COLUMNS = useMemo(
@@ -145,14 +260,180 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     [statusConfig, theme]
   );
 
-  return (
-    <Box>
-      <Stack direction="row" justifyContent="flex-end" alignItems="center" sx={{ mb: 2 }}>
-        <Button variant="contained" size="medium" onClick={handleCreateLot} sx={{ textTransform: "none", fontWeight: 700 }}>
-          {STRINGS.SOURCING.BATCH_LIST.CREATE_LOT}
-        </Button>
+  const createLotSx = useMemo(() => {
+    const primary = theme.palette.primary;
+    const shadowAlpha = mode === "dark" ? 0.35 : 0.25;
+    const hoverShadowAlpha = mode === "dark" ? 0.45 : 0.32;
+    return {
+      ...theme.batchList.action.primary,
+      textTransform: "none" as const,
+      fontWeight: 800,
+      fontSize: "0.8rem",
+      px: 2,
+      py: 0.75,
+      minHeight: 34,
+      borderRadius: 2,
+      gap: 0.75,
+      "& .MuiButton-startIcon": { ml: -0.25, mr: 0.25 },
+      "& .MuiSvgIcon-root": { fontSize: 18 },
+      boxShadow: `0 2px 10px ${alpha(primary, shadowAlpha)}`,
+      "&:hover": {
+        ...((theme.batchList.action.primary as Record<string, unknown>)["&:hover"] as object),
+        boxShadow: `0 4px 16px ${alpha(primary, hoverShadowAlpha)}`,
+      },
+    };
+  }, [theme, mode]);
+
+  const handleApplyPanelFilters = () => {
+    let from = draftFrom;
+    let to = draftTo;
+    if (from && to && from > to) {
+      const swap = from;
+      from = to;
+      to = swap;
+    }
+    const next: RawMaterialLotListAdvancedFilters & { status: string } = {
+      materialCodes: draftMaterial === FILTER_ALL ? [] : [draftMaterial],
+      manufacturer: draftManufacturer,
+      fromDate: from,
+      toDate: to,
+      status: draftStatus,
+    };
+    applyAdvancedFilters(next);
+    setFilterOpen(false);
+  };
+
+  const handleClearAllFilters = () => {
+    clearAdvancedFilters();
+    setDraftMaterial(FILTER_ALL);
+    setDraftManufacturer("");
+    setDraftFrom("");
+    setDraftTo("");
+    setDraftStatus(FILTER_ALL);
+  };
+
+  const searchBarEnd = (
+    <FilterToggleButton
+      label={STRINGS.SOURCING.BATCH_LIST.FILTERS_TOGGLE}
+      count={activeFilterCount}
+      isOpen={filterOpen}
+      onClick={() => setFilterOpen((v) => !v)}
+      sx={filterToggleSx.filterBtn(filterOpen || activeFilterCount > 0)}
+      iconSx={filterToggleSx.filterBtnIcon}
+      textSx={filterToggleSx.filterBtnText}
+      badgeSx={filterToggleSx.filterBadgePill}
+      chevronSx={filterToggleSx.filterBtnChevron}
+    />
+  );
+
+  const filterExtension = filterOpen ? (
+    <Stack
+      spacing={1.5}
+      sx={{
+        mt: 1.5,
+        pt: 2,
+        borderTop: `1px solid ${alpha(theme.palette.border, 0.55)}`,
+      }}
+    >
+      <FilterPanelHeader
+        title={STRINGS.SOURCING.BATCH_LIST.FILTERS_TITLE}
+        count={activeFilterCount}
+        onClear={handleClearAllFilters}
+        clearLabel={STRINGS.SOURCING.BATCH_LIST.FILTERS_CLEAR}
+        containerSx={filterPanelHeaderSx.containerSx}
+        iconSx={filterPanelHeaderSx.iconSx}
+        labelSx={filterPanelHeaderSx.labelSx}
+        badgeSx={filterPanelHeaderSx.badgeSx}
+        clearChipSx={filterPanelHeaderSx.clearChipSx}
+      />
+
+      <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ minWidth: { xs: "100%", sm: 220 }, flex: { lg: "0 0 auto" } }}>
+          <TextField
+            select
+            size="small"
+            label={STRINGS.SOURCING.BATCH_LIST.FILTERS_MATERIAL}
+            value={draftMaterial}
+            onChange={(e) => setDraftMaterial(e.target.value)}
+            disabled={materialsLoading}
+            fullWidth
+          >
+            <MenuItem value={FILTER_ALL}>{STRINGS.SOURCING.BATCH_LIST.FILTERS_ALL_MATERIALS}</MenuItem>
+            {!materialsLoading &&
+              materialOptions.map((m: { materialCode: string; materialName: string }) => (
+                <MenuItem key={m.materialCode} value={m.materialCode}>
+                  {m.materialCode} — {m.materialName}
+                </MenuItem>
+              ))}
+          </TextField>
+          {materialsLoading ? <CircularProgress size={22} sx={{ mt: 1.25, color: theme.palette.primaryLight }} /> : null}
+        </Stack>
+
+        <TextField
+          size="small"
+          label={STRINGS.SOURCING.BATCH_LIST.FILTERS_MANUFACTURER}
+          value={draftManufacturer}
+          onChange={(e) => setDraftManufacturer(e.target.value)}
+          placeholder="e.g. Prefiled"
+          sx={{ minWidth: { xs: "100%", sm: 200 }, flex: { lg: 1 } }}
+        />
+
+        <TextField
+          select
+          size="small"
+          label={STRINGS.SOURCING.BATCH_LIST.FILTERS_STATUS}
+          value={draftStatus}
+          onChange={(e) => setDraftStatus(e.target.value)}
+          sx={{ minWidth: { xs: "100%", sm: 200 } }}
+        >
+          {STATUS_DROPDOWN_VALUES.map((s) => (
+            <MenuItem key={s} value={s}>
+              {s === FILTER_ALL ? FILTER_ALL : statusConfig[s]?.label ?? s}
+            </MenuItem>
+          ))}
+        </TextField>
+
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <DatePicker
+            label={STRINGS.SOURCING.BATCH_LIST.FILTERS_FROM_DATE}
+            format="YYYY-MM-DD"
+            value={draftFrom ? dayjs(draftFrom) : null}
+            onChange={(v) => setDraftFrom(v && v.isValid() ? v.format("YYYY-MM-DD") : "")}
+            slotProps={{
+              textField: {
+                size: "small",
+                sx: { minWidth: { xs: "100%", sm: 160 } },
+              },
+            }}
+          />
+          <DatePicker
+            label={STRINGS.SOURCING.BATCH_LIST.FILTERS_TO_DATE}
+            format="YYYY-MM-DD"
+            value={draftTo ? dayjs(draftTo) : null}
+            onChange={(v) => setDraftTo(v && v.isValid() ? v.format("YYYY-MM-DD") : "")}
+            slotProps={{
+              textField: {
+                size: "small",
+                sx: { minWidth: { xs: "100%", sm: 160 } },
+              },
+            }}
+          />
+        </LocalizationProvider>
       </Stack>
 
+      <Stack direction="row" justifyContent="flex-end" spacing={1}>
+        <Button variant="outlined" size="small" onClick={() => setFilterOpen(false)} sx={{ textTransform: "none", fontWeight: 700 }}>
+          {STRINGS.SOURCING.BATCH_LIST.FILTERS_CLOSE_PANEL}
+        </Button>
+        <Button variant="contained" size="small" onClick={handleApplyPanelFilters} sx={{ ...theme.batchList.action.primary, textTransform: "none" }}>
+          {STRINGS.SOURCING.BATCH_LIST.FILTERS_APPLY}
+        </Button>
+      </Stack>
+    </Stack>
+  ) : null;
+
+  return (
+    <Box>
       <UserBatchList
         rows={batches}
         columns={COLUMNS}
@@ -176,6 +457,13 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         onSearchChange={setSearch}
         onStatusFilterChange={setStatusFilter}
         isLoading={loading}
+        searchBarEnd={searchBarEnd}
+        filterExtension={filterExtension}
+        statusToolbarEnd={
+          <Button variant="contained" size="small" startIcon={<AddRoundedIcon />} onClick={handleCreateLot} sx={createLotSx}>
+            {STRINGS.SOURCING.BATCH_LIST.CREATE_LOT}
+          </Button>
+        }
         renderAction={(row: any) => (
           <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" flexWrap="wrap">
             <UserWorkflowStatusAction
@@ -187,9 +475,11 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
               theme={theme}
               fillLabel={STRINGS.SOURCING.BATCH_LIST.FILL_ACTION}
               continueLabel={STRINGS.SOURCING.BATCH_LIST.CONTINUE_ACTION}
+              continueUsesPrimaryStyle
+              editLabel={STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
               editTooltip={STRINGS.SOURCING.BATCH_LIST.EDIT_ACTION_TOOLTIP}
             />
-            {canShowEditButton(row.rmStatus) && (
+            {canShowEditLotButton(row.rmStatus) && (
               <Button variant="outlined" size="small" onClick={() => handleEditLot(row)} sx={theme.batchList.action.secondary}>
                 {STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
               </Button>

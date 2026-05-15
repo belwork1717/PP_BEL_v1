@@ -6,32 +6,40 @@ import {
 import {
   createRocketMotorCasingFormApi,
   fetchRocketMotorCasingFormDetailsApi,
+  fetchRocketMotorCasingListApi,
+  type RocketMotorCasingListRequest,
   updateRocketMotorCasingFormApi,
 } from "../../../data/api/users/sourcing/rocketMotorCasingProcurementApi";
 
 export type RocketMotorCasingCreatePayload = {
-  batchId: string;
   subDepartmentId: number;
+  motorStage: string;
+  motorNo: string;
+  motorCasingId: string;
   formSubmissionType: "DRAFT" | "SUBMIT";
-  casingDetails: Record<string, any>;
+  sections: Record<string, unknown>;
 };
 
-export type RocketMotorCasingUpdatePayload = {
-  formId: string;
-  subDepartmentId: number;
-  formSubmissionType: "DRAFT" | "UPDATE";
-  casingDetails: Record<string, any>;
-};
+export type RocketMotorCasingUpdatePayload = RocketMotorCasingCreatePayload;
 
 export type RocketMotorCasingDetailsPayload = {
-  formId: string;
-  subDepartmentId: number;
+  motorCasingId: string;
 };
 
 export const rocketMotorCasingController = {
+  fetchCasingList: async (payload: RocketMotorCasingListRequest) => {
+    try {
+      const response = await fetchRocketMotorCasingListApi(payload);
+      return new ApiResponseModel(response);
+    } catch (error) {
+      console.error("Failed to fetch rocket motor casing list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
   createForm: async (payload: RocketMotorCasingCreatePayload) => {
     try {
-      const response = await createRocketMotorCasingFormApi(payload);
+      const response = await createRocketMotorCasingFormApi(payload as unknown as Record<string, unknown>);
       return new ApiResponseModel<RocketMotorCasingSubmitResponseModel>(response, (res) =>
         RocketMotorCasingSubmitResponseModel.fromApi(res)
       );
@@ -55,7 +63,7 @@ export const rocketMotorCasingController = {
 
   updateForm: async (payload: RocketMotorCasingUpdatePayload) => {
     try {
-      const response = await updateRocketMotorCasingFormApi(payload);
+      const response = await updateRocketMotorCasingFormApi(payload as unknown as Record<string, unknown>);
       return new ApiResponseModel<RocketMotorCasingSubmitResponseModel>(response, (res) =>
         RocketMotorCasingSubmitResponseModel.fromApi(res)
       );

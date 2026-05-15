@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { STRINGS } from "../../../app/config/strings";
 import { useAlertStore } from "../../../app/store/alertStore";
-import { useAuthStore } from "../../../app/store/authStore";
 import { APPROVER_STATUS_META, APPROVER_PRIORITY_META } from "../../../app/theme/approver";
 import useApproverFormAction from "../useApproverFormAction";
 import rocketMotorCasingController from "../../../controllers/user/sourcing/rocketMotorCasingController";
+import { RocketMotorCasingDetailsModel } from "../../../data/models/user/RocketMotorCasingProcurementModel";
+import type { RocketFormData } from "../../../hooks/user/sourcing/sourcingWorkflowData";
 
 const DEPARTMENT_SLUG = "sourcing";
 const SUB_DEPARTMENT_SLUG = "rocket-motor";
@@ -18,11 +19,7 @@ const DETAIL_COLS = [
   { key: "remarks", label: "Remarks", width: "30%" },
 ];
 
-const mapCasingDetailsToBlocks = (details: any) => {
-  if (!details?.casingDetails) return [];
-
-  const cd = details.casingDetails;
-
+const mapFormDataToCasingBlocks = (cd: RocketFormData) => {
   const insulationRows = [
     { specification: "Tensile Strength", analysedResult: cd.tensileStrengthDetails || "—", remarks: cd.tensileStrengthRemarks || "—" },
     { specification: "Elongation", analysedResult: cd.elongationDetails || "—", remarks: cd.elongationRemarks || "—" },
@@ -33,16 +30,30 @@ const mapCasingDetailsToBlocks = (details: any) => {
 
   const blocks: any[] = [
     {
+      material: "Motor casing",
+      lotNo: cd.motorCasingId || "—",
+      rows: [
+        { specification: "Motor stage", analysedResult: cd.motorStageApi || "—", remarks: "—" },
+        { specification: "Motor no.", analysedResult: cd.motorNoApi || "—", remarks: "—" },
+        {
+          specification: "Items received",
+          analysedResult: `${cd.itemsDescription || "—"} · ${cd.itemsDimension || "—"} ${cd.itemsUnit || ""}`.trim(),
+          remarks: "—",
+        },
+      ],
+      _columns: DETAIL_COLS,
+    },
+    {
       material: "Motor & Clearance",
       lotNo: "",
       rows: [
-        { specification: "Motor ID", analysedResult: cd.motorIdDetails || "—", remarks: cd.motorIdRemarks || "—" },
+        { specification: "Motor ID (legacy / notes)", analysedResult: cd.motorIdDetails || "—", remarks: cd.motorIdRemarks || "—" },
         { specification: "Motor Clearance Report", analysedResult: cd.motorClearanceDetails || "—", remarks: cd.motorClearanceRemarks || "—" },
       ],
       _columns: DETAIL_COLS,
     },
     {
-      material: "Insulation Clearance Report",
+      material: "Insulation report",
       lotNo: "",
       rows: insulationRows,
       _columns: DETAIL_COLS,
@@ -73,6 +84,24 @@ const mapCasingDetailsToBlocks = (details: any) => {
     });
   }
 
+  blocks.push({
+    material: "Weighment",
+    lotNo: "",
+    rows: [
+      {
+        specification: "Weight without harness (kg)",
+        analysedResult: cd.weightWithoutHarness || "—",
+        remarks: "—",
+      },
+      {
+        specification: "Weight with harness (kg)",
+        analysedResult: cd.weightWithHarness || "—",
+        remarks: cd.calibrationRef ? `Calibration: ${cd.calibrationRef}` : "—",
+      },
+    ],
+    _columns: DETAIL_COLS,
+  });
+
   const dimRows =
     cd.dimensionalData?.length > 0
       ? cd.dimensionalData.map((d: any) => ({
@@ -88,7 +117,6 @@ const mapCasingDetailsToBlocks = (details: any) => {
 };
 
 export const useRocketMotorCasingApproverHook = () => {
-  const user = useAuthStore((state) => state.user);
   const showAlert = useAlertStore((state) => state.showAlert);
   const [items, setItems] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
@@ -101,26 +129,12 @@ export const useRocketMotorCasingApproverHook = () => {
     subDepartment: SUB_DEPARTMENT_SLUG,
   });
 
-  const subDepartmentId = useMemo(
-    () =>
-      user?.allSubDepartments.find(
-        (sd) => sd.slugs?.dept === DEPARTMENT_SLUG && sd.slugs?.subDept === SUB_DEPARTMENT_SLUG,
-      )?.subDepartmentId ?? null,
-    [user],
-  );
-
   const handleViewDetails = async (row: any) => {
     setSelected({ ...row, casingBlocks: [] });
     setDetailsLoading(true);
 
-    if (!subDepartmentId) {
-      setDetailsLoading(false);
-      setSelected(null);
-      showAlert(STRINGS.APPROVER.ACTION.SUBDEPARTMENT_MISSING, "error", { autoCloseMs: 3000 });
-      return;
-    }
-
-    if (!row?.formId) {
+    const motorCasingId = String(row?.motorCasingId ?? row?.batchId ?? "").trim();
+    if (!motorCasingId) {
       setDetailsLoading(false);
       setSelected(null);
       showAlert(S.FORM_ID_MISSING, "error", { autoCloseMs: 3000 });
@@ -128,23 +142,27 @@ export const useRocketMotorCasingApproverHook = () => {
     }
 
     const response = await rocketMotorCasingController.fetchFormDetails({
-      formId: row.formId,
-      subDepartmentId,
+      motorCasingId,
     });
 
     setDetailsLoading(false);
 
     if (!response?.success || !response?.data) {
-      showAlert(response?.message || S.DETAILS_FETCH_ERROR, "error", { autoCloseMs: 3500 });
+      const err = response?.error as { details?: string } | undefined;
+      showAlert(err?.details || response?.message || S.DETAILS_FETCH_ERROR, "error", { autoCloseMs: 3500 });
       setSelected(null);
       return;
     }
 
+    const model = response.data as RocketMotorCasingDetailsModel;
+    const cd = RocketMotorCasingDetailsModel.toFormData(model);
+
     setSelected({
       ...row,
-      batchId: response.data.batchId || row.batchId,
-      formId: response.data.formId || row.formId,
-      casingBlocks: mapCasingDetailsToBlocks(response.data),
+      batchId: motorCasingId,
+      motorCasingId,
+      formId: row.formId ?? model.motorCasingId,
+      casingBlocks: mapFormDataToCasingBlocks(cd),
     });
   };
 

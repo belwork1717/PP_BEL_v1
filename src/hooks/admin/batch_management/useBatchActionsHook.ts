@@ -9,7 +9,8 @@ const EMPTY_BATCH_FORM = {
   batchType:       "",
   subBatchType:    "",
   projectId:       "",
-  motorType:       "", // Stored as motorTypeName string; converted to object when posting
+  motorType:       "", // Motor stage letter; converted to { motorTypeId, motorTypeName } when posting
+  motorTypeId:     null as number | null,
   numberOfMotors:  1,
   motorIds:        [""],
   priority:        "Medium",
@@ -56,6 +57,7 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
   
   const [saving, setSaving]                 = useState(false);
   const [implSaving, setImplSaving]         = useState(false);
+  const [implViewOnly, setImplViewOnly]     = useState(false);
   const [deleting, setDeleting]             = useState(false);
 
   /* ── Convert BatchListItemModel to batch form ──────────────────────────── */
@@ -64,6 +66,7 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
     subBatchType:    b.subBatchType    ?? "",
     projectId:       b.projectId       ?? "",
     motorType:       b.motorType?.motorTypeName ?? (typeof b.motorType === "string" ? b.motorType : ""),
+    motorTypeId:     b.motorType?.motorTypeId ?? null,
     numberOfMotors:  b.numberOfMotors  ?? 1,
     motorIds:        Array.isArray(b.motorIds) ? b.motorIds : [""],
     priority:        b.priority        ?? "Medium",
@@ -110,10 +113,10 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
     }
   };
 
-  /* ── Open complete implementation details (Step 2) ────────────────────── */
-  const openCompleteImplementation = async (batch: any) => {
+  const loadImplementationForm = async (batch: any, viewOnly: boolean) => {
     const batchId = batch.batchId;
 
+    setImplViewOnly(viewOnly);
     setImplSaving(true);
     setImplModalOpen(true);
     setEditImplTarget(batch);
@@ -127,13 +130,25 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
       } else {
         useAlertStore.getState().showAlert(S.MESSAGES.LOAD_BATCH_FAILED, "error");
         setImplModalOpen(false);
+        setImplViewOnly(false);
       }
     } finally {
       setImplSaving(false);
     }
   };
 
+  /* ── Open complete implementation details (Step 2) ────────────────────── */
+  const openCompleteImplementation = async (batch: any) => {
+    await loadImplementationForm(batch, false);
+  };
+
+  /** Read-only view of completed implementation sheet */
+  const openViewImplementation = async (batch: any) => {
+    await loadImplementationForm(batch, true);
+  };
+
   const openImplementationFromCreate = () => {
+    setImplViewOnly(false);
     setEditImplTarget(null);
     setImplForm({
       identificationSheet: batchForm.identificationSheet ?? { ...EMPTY_IMPL_FORM.identificationSheet },
@@ -354,6 +369,9 @@ export const useBatchActions = (userOptions: any[], onSuccess: () => void) => {
     implForm,
     implSaving,
     openCompleteImplementation,
+    openViewImplementation,
+    implViewOnly,
+    setImplViewOnly,
     openImplementationFromCreate,
     handleSaveImplementation,
     handleImplFormChange,

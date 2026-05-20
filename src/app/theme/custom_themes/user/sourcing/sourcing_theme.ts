@@ -17,6 +17,50 @@ const getSourcingWorkflowTheme = (baseTheme: any, mode = "light") => {
         color: palette.textSub,
         marginBottom: "4px",
       },
+      /** Shared 40px row height for supply order, receipt date, and manufacturer fields. */
+      metaRowTextField: {
+        "& .MuiOutlinedInput-root, & .MuiPickersOutlinedInput-root": {
+          borderRadius: 1.5,
+          background: palette.surface,
+          fontSize: "0.84rem",
+          height: 40,
+          minHeight: 40,
+          maxHeight: 40,
+          boxSizing: "border-box",
+          transition: "all 0.18s",
+          "& fieldset, & .MuiPickersOutlinedInput-notchedOutline": { borderColor: palette.border },
+          "&:hover fieldset, &:hover .MuiPickersOutlinedInput-notchedOutline": {
+            borderColor: palette.primaryLight,
+          },
+          "&.Mui-focused fieldset, &.Mui-focused .MuiPickersOutlinedInput-notchedOutline": {
+            borderColor: palette.primaryLight,
+            borderWidth: 1.5,
+          },
+          "&.Mui-focused": {
+            background: isDark ? palette.pageBg : "#fff",
+            boxShadow: `0 0 0 2px ${alpha(palette.primaryLight, 0.1)}`,
+          },
+        },
+        "& .MuiInputBase-input, & .MuiPickersSectionList-root": {
+          fontWeight: 500,
+          color: palette.text,
+          fontSize: "0.84rem",
+          padding: "8.5px 10px",
+          height: "100%",
+          boxSizing: "border-box",
+        },
+        "& .MuiInputAdornment-root": {
+          marginLeft: 0,
+          height: "100%",
+          maxHeight: "none",
+          "& .MuiIconButton-root": {
+            padding: 4,
+            width: 28,
+            height: 28,
+            color: alpha(palette.text, 0.55),
+          },
+        },
+      },
       textField: {
         "& .MuiOutlinedInput-root": {
           borderRadius: 1.5,

@@ -79,7 +79,8 @@ const AppHeader = ({ title = S.DEFAULT_TITLE, onLogout, onNavSelect }) => {
 
   const showDeptDropdown = roleKey === "USER" || roleKey === "APPROVER";
   const showDrawer = roleKey === "ADMIN";
-  const showProfileMenu = roleKey === "SYSTEM_MANAGER";
+  const showProfileMenu =
+    roleKey === "USER" || roleKey === "APPROVER" || roleKey === "SYSTEM_MANAGER";
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingOption, setPendingOption] = useState(null); // { value, label, dept }

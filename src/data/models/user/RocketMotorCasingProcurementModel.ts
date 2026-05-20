@@ -1,5 +1,46 @@
 import { INITIAL_ROCKET_FORM, RocketFormData } from "../../../hooks/user/sourcing/sourcingWorkflowData";
 import { OPERATION_STATUS, type OperationStatus } from "../../../hooks/operationStatus";
+import {
+  EPDM_MECH_KEYS,
+  isLooseFlapDimensionalParam,
+  parseSectionsToFormData,
+  ROCASIN_MECH_KEYS,
+  THERMAL_PROP_KEYS,
+  type RocketMotorCasingFormData,
+} from "./RocketMotorCasingFormModel";
+
+/** Soft-delete is allowed only while the casing form is still in progress (draft). */
+export const canDeleteRocketMotorCasing = (status: string | null | undefined) =>
+  status === OPERATION_STATUS.IN_PROGRESS;
+
+export type RocketMotorCasingDeletePayload = {
+  motorCasingId: string;
+};
+
+export type RocketMotorCasingDeleteResponse = {
+  motorCasingId: string;
+  status: string;
+};
+
+export type { RocketMotorCasingFormData, RocketMotorCasingFormPayload } from "./RocketMotorCasingFormModel";
+export {
+  buildCasingFormPayload,
+  parseSectionsToFormData,
+  INITIAL_ROCKET_MOTOR_CASING_FORM,
+  validateCasingFormForSubmit,
+  validateCasingFormStep,
+  isCasingFormComplete,
+  canSaveCasingDraft,
+  CASING_FORM_STEP_COUNT,
+  serializeCasingForm,
+  dimensionalRowFromParameter,
+  normalizeDimensionalRow,
+  createInitialMechanicalProperties,
+  createInitialVisualInspection,
+  ROCASIN_MECH_KEYS,
+  EPDM_MECH_KEYS,
+  THERMAL_PROP_KEYS,
+} from "./RocketMotorCasingFormModel";
 
 type DimensionalRow = {
   paramId?: string;
@@ -68,6 +109,8 @@ export class RocketMotorCasingSubmitResponseModel {
 }
 
 export class RocketMotorCasingDetailsModel {
+  formId: string;
+  projectId: string;
   subDepartmentId: number;
   motorStage: string;
   motorNo: string;
@@ -76,6 +119,8 @@ export class RocketMotorCasingDetailsModel {
   sections: Record<string, unknown>;
 
   constructor(payload: any) {
+    this.formId = String(payload?.formId ?? "");
+    this.projectId = String(payload?.projectId ?? "");
     this.subDepartmentId = Number(payload?.subDepartmentId ?? 0);
     this.motorStage = String(payload?.motorStage ?? "");
     this.motorNo = String(payload?.motorNo ?? "");
@@ -97,6 +142,19 @@ export class RocketMotorCasingDetailsModel {
       motorNo: model.motorNo,
       motorCasingId: model.motorCasingId,
     });
+  }
+
+  static toCasingFormData(model: RocketMotorCasingDetailsModel): RocketMotorCasingFormData {
+    return parseSectionsToFormData(model.sections, {
+      projectId: model.projectId,
+      motorStage: model.motorStage,
+      motorNo: model.motorNo,
+      motorCasingId: model.motorCasingId,
+    });
+  }
+
+  static toDetailBlocks(model: RocketMotorCasingDetailsModel): CasingDetailBlock[] {
+    return mapCasingFormDataToDetailBlocks(RocketMotorCasingDetailsModel.toCasingFormData(model));
   }
 }
 
@@ -358,3 +416,222 @@ export const mapRocketFormToCasingPayload = (formData: RocketFormData, motorType
     dimensionalData,
   };
 };
+
+export type CasingDetailColumn = { key: string; label: string; width?: string };
+
+export type CasingDimensionalTableRow = {
+  paramName: string;
+  paramId: string;
+  side: string;
+  sequenceNo: number;
+  specRange: string;
+  readings: {
+    r2tR2b: string;
+    r1rR1l: string;
+    tlBr: string;
+    trBl: string;
+  };
+  looseFlap: { arcLength: string; axialLength: string };
+  remarks: string;
+  isLooseFlap: boolean;
+};
+
+export type CasingDetailBlock = {
+  material: string;
+  lotNo?: string;
+  rows: Array<{ specification: string; analysedResult: string; remarks: string }>;
+  _columns?: CasingDetailColumn[];
+  /** When set, UI renders a multi-column dimensional readings table */
+  dimensionalTable?: CasingDimensionalTableRow[];
+};
+
+export type RocketMotorCasingDetailsContext = {
+  formId: string;
+  projectId: string;
+  motorCasingId: string;
+  procurementId: string;
+  motorStage: string;
+  motorNo: string;
+  casingType: string;
+  insulationType: string;
+  receivingDate: string;
+  rmStatus: string;
+  createdBy?: { fullName: string } | null;
+  createdOn: string;
+  rejectionReason?: string | null;
+};
+
+const CASING_DETAIL_COLS: CasingDetailColumn[] = [
+  { key: "specification", label: "Section / Parameter", width: "35%" },
+  { key: "analysedResult", label: "Details", width: "35%" },
+  { key: "remarks", label: "Remarks", width: "30%" },
+];
+
+const detailRow = (specification: string, analysedResult: string, remarks = "—") => ({
+  specification,
+  analysedResult: analysedResult?.trim() ? analysedResult : "—",
+  remarks: remarks?.trim() ? remarks : "—",
+});
+
+const formatSpecRange = (ref: RocketMotorCasingFormData["dimensionalData"][0]["referenceRange"]) => {
+  const { minValue, maxValue, unit, source } = ref;
+  const range =
+    minValue != null || maxValue != null
+      ? `${minValue ?? "—"} – ${maxValue ?? "—"}${unit ? ` ${unit}` : ""}`.trim()
+      : "—";
+  return source && range !== "—" ? `${range} (${source})` : range;
+};
+
+const mapDimensionalTableRows = (form: RocketMotorCasingFormData): CasingDimensionalTableRow[] =>
+  (form.dimensionalData ?? []).map((d) => ({
+    paramName: d.paramName || d.paramId || "—",
+    paramId: d.paramId,
+    side: d.side && d.side !== "COMMON" ? d.side : "—",
+    sequenceNo: d.sequenceNo,
+    specRange: formatSpecRange(d.referenceRange),
+    readings: { ...d.readings },
+    looseFlap: { ...d.looseFlap },
+    remarks: d.remarks?.trim() || "—",
+    isLooseFlap: isLooseFlapDimensionalParam(d),
+  }));
+
+/** Read-only document blocks from parsed API form data (v2 sections) */
+export function mapCasingFormDataToDetailBlocks(form: RocketMotorCasingFormData): CasingDetailBlock[] {
+  const mechKeyDefs = form.insulationType === "EPDM" ? EPDM_MECH_KEYS : ROCASIN_MECH_KEYS;
+  const mechRows = mechKeyDefs
+    .map((def) => {
+      const r = form.mechanicalProperties[def.paramKey];
+      if (!r) return null;
+      const reported = (r.reported ?? "").trim();
+      const acem = (r.acemSpec ?? "").trim();
+      if (!reported && !acem) return null;
+      return detailRow(
+        r.paramName || def.paramName,
+        reported ? `${reported} ${r.unit || def.unit}`.trim() : "—",
+        acem ? `ACEM spec: ${acem} ${r.unit || def.unit}`.trim() : "—"
+      );
+    })
+    .filter((r): r is NonNullable<typeof r> => r != null);
+
+  const thermalRows = THERMAL_PROP_KEYS.map((def) => {
+    const r = form.thermalProperties[def.key];
+    if (!r) return null;
+    const reported = (r.reported ?? "").trim();
+    const acem = (r.acemSpec ?? "").trim();
+    if (!reported && !acem) return null;
+    return detailRow(
+      def.label,
+      reported ? `${reported} ${r.unit || def.unit}`.trim() : "—",
+      acem ? `ACEM spec: ${acem} ${r.unit || def.unit}`.trim() : "—"
+    );
+  }).filter((r): r is NonNullable<typeof r> => r != null);
+
+  const insulationRows: CasingDetailBlock["rows"] = [
+    detailRow("Insulation curing date", form.insulationCuringDate),
+    detailRow("Insulation type", form.insulationType),
+    detailRow("Report no.", form.insulationReportNo),
+    detailRow("Receipt status", form.insulationReceiptStatus),
+    ...(form.insulationReportExisting
+      ? [
+          detailRow(
+            "Report upload",
+            form.insulationReportExisting.fileName,
+            form.insulationReportExisting.fileUrl
+          ),
+        ]
+      : []),
+    ...mechRows,
+    ...thermalRows,
+  ];
+
+  const visualRows =
+    form.visualInspection?.length > 0
+      ? form.visualInspection.flatMap((v) => {
+          const base = detailRow(
+            v.description || v.itemKey,
+            v.observations,
+            v.remark || (v.mediaExisting?.fileUrl ? v.mediaExisting.fileUrl : "—")
+          );
+          const mediaRow = v.mediaExisting
+            ? detailRow("Attached media", v.mediaExisting.fileName, v.mediaExisting.fileUrl)
+            : null;
+          const subRows =
+            v.subItems?.map((s) =>
+              detailRow(s.description || s.itemKey, s.observations, s.remark)
+            ) ?? [];
+          return [base, ...(mediaRow ? [mediaRow] : []), ...subRows];
+        })
+      : [detailRow("No visual inspection recorded", "—")];
+
+  const dimensionalTable = mapDimensionalTableRows(form);
+
+  const blocks: CasingDetailBlock[] = [
+    {
+      material: "Motor receipt",
+      lotNo: form.motorCasingId || undefined,
+      rows: [
+        detailRow("Project ID", form.projectId),
+        detailRow("Motor stage", form.motorStageApi),
+        detailRow("Motor no.", form.motorNoApi),
+        detailRow("Casing type", form.casingType),
+        detailRow("Receiving date", form.receivingDate),
+        detailRow("Item type / description", form.itemsDescription),
+        detailRow("Dimension", form.itemsDimension, form.itemsUnit),
+        detailRow("Receipt status", form.itemsReceiptStatus),
+        detailRow("Observations", form.itemsObservations),
+      ],
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "Clearances",
+      rows: [
+        detailRow("Green card status", form.greenCardStatus),
+        detailRow("Green card no.", form.greenCardNo),
+        detailRow("Clearance date", form.clearanceDate),
+        detailRow("Authority", form.clearanceAuthority),
+        detailRow("Details & observations", form.clearanceDetails),
+      ],
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "Insulation",
+      lotNo: form.insulationReportNo || undefined,
+      rows: insulationRows,
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "NDT / UT report",
+      rows: [
+        detailRow("Post-PPT UT date", form.postPptUtDate),
+        detailRow("NDT date", form.ndtDate),
+        detailRow("NDT observations", form.ndtObservations),
+        detailRow("ACEM NDT observations", form.acemNdtObservations),
+        detailRow("Project rubber surface observations", form.projectRubberSurfaceObservations),
+        detailRow("Other details", form.otherDetails),
+      ],
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "Visual inspection",
+      rows: visualRows,
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "Weighment",
+      rows: [
+        detailRow("Weight without harness", form.weightWithoutHarness ? `${form.weightWithoutHarness} kg` : "—"),
+        detailRow("Weight with harness", form.weightWithHarness ? `${form.weightWithHarness} kg` : "—"),
+        detailRow("Weighscale equipment", form.weighscaleEquipment),
+        detailRow("Calibration due date", form.calibrationDueDate),
+      ],
+      _columns: CASING_DETAIL_COLS,
+    },
+    {
+      material: "Dimensional inspection",
+      rows: dimensionalTable.length ? [] : [detailRow("No dimensional data recorded", "—")],
+      dimensionalTable: dimensionalTable.length ? dimensionalTable : undefined,
+    },
+  ];
+
+  return blocks;
+}

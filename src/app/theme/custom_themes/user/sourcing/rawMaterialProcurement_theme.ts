@@ -73,6 +73,22 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 					margin: 0,
 				},
 			},
+			failedAnalyzedField: {
+				"& .MuiOutlinedInput-root": {
+					background: alpha(palette.danger, 0.05),
+					"& fieldset": { borderColor: alpha(palette.danger, 0.45) },
+					"&:hover fieldset": { borderColor: palette.danger },
+					"&.Mui-focused fieldset": { borderColor: palette.danger, borderWidth: 1.5 },
+				},
+			},
+			failedSpecChip: {
+				height: 20,
+				fontSize: "0.62rem",
+				fontWeight: 800,
+				background: alpha(palette.danger, 0.1),
+				color: palette.danger,
+				border: `1px solid ${alpha(palette.danger, 0.28)}`,
+			},
 			remarksField: { minWidth: 0 },
 			editModeBanner: {
 				mb: 2.5,
@@ -137,14 +153,120 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				analysedResult: { minWidth: 140 },
 				remarks: { minWidth: 200 },
 			},
-			dataRow: (rowIndex: number) => ({
-				"&:hover": { background: alpha(palette.primaryLight, 0.03) },
+			dataRow: (rowIndex: number, isFailed = false) => ({
+				"&:hover": {
+					background: isFailed ? alpha(palette.danger, 0.09) : alpha(palette.primaryLight, 0.03),
+				},
 				"&:last-child td": { borderBottom: "none" },
-				background: rowIndex % 2 === 0 ? palette.surface : alpha(palette.surface, 0.6),
+				background: isFailed
+					? alpha(palette.danger, 0.06)
+					: rowIndex % 2 === 0
+						? palette.surface
+						: alpha(palette.surface, 0.6),
+				boxShadow: isFailed ? `inset 3px 0 0 ${palette.danger}` : "none",
 			}),
 		},
 		specification: {
 			panelBorder: alpha(palette.primaryLight ?? "#2E86C1", 0.28),
+		},
+		lotDetails: {
+			page: { animation: "fadeIn 0.35s ease both" },
+			document: {
+				borderRadius: 3,
+				border: `1px solid ${palette.border ?? "#D5D8DC"}`,
+				boxShadow: `0 4px 24px ${alpha(palette.primary ?? "#1B4F72", 0.08)}`,
+				overflow: "hidden",
+				background: palette.pageBg ?? "#fff",
+			},
+			banner: {
+				p: "18px 24px",
+				background: `linear-gradient(135deg, ${palette.primary}, ${palette.primaryLight})`,
+				color: "#fff",
+			},
+			bannerTitle: { fontWeight: 800, fontSize: "1.05rem", color: "#fff" },
+			bannerSubtitle: { fontSize: "0.78rem", color: alpha("#fff", 0.78), mt: 0.35 },
+			bannerIcon: { fontSize: 28, color: "#fff", opacity: 0.95 },
+			body: { p: { xs: 2, sm: 3 }, background: palette.surface ?? palette.pageBg },
+			section: {
+				mb: 3,
+				p: 2,
+				borderRadius: 2,
+				border: `1px solid ${alpha(palette.border ?? "#D5D8DC", 0.65)}`,
+				background: palette.pageBg ?? "#fff",
+			},
+			sectionTitle: {
+				fontSize: "0.72rem",
+				fontWeight: 800,
+				letterSpacing: "0.08em",
+				textTransform: "uppercase",
+				color: palette.primaryLight,
+				mb: 1.5,
+				display: "flex",
+				alignItems: "center",
+				gap: 0.75,
+			},
+			metaGrid: {
+				display: "grid",
+				gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(3, 1fr)" },
+				gap: 1.5,
+			},
+			metaItem: {
+				p: 1.25,
+				borderRadius: 1.5,
+				background: alpha(palette.primaryLight ?? "#2E86C1", 0.04),
+				border: `1px solid ${alpha(palette.primaryLight ?? "#2E86C1", 0.12)}`,
+			},
+			metaLabel: { fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: palette.textSub },
+			metaValue: { fontSize: "0.88rem", fontWeight: 700, color: palette.text, mt: 0.35 },
+			tableContainer: {
+				borderRadius: 1.5,
+				border: `1px solid ${palette.border ?? "#D5D8DC"}`,
+				overflow: "hidden",
+			},
+			tableHeaderCell: {
+				background: alpha(palette.primary ?? "#1B4F72", 0.06),
+				fontWeight: 700,
+				fontSize: "0.65rem",
+				letterSpacing: "0.05em",
+				textTransform: "uppercase",
+				color: palette.textSub,
+				py: 1,
+				px: 1.5,
+				borderBottom: `1px solid ${palette.border}`,
+			},
+			tableRow: (idx: number, failed?: boolean) => ({
+				background: failed
+					? alpha(palette.danger, 0.06)
+					: idx % 2 === 0
+						? palette.pageBg ?? "#fff"
+						: alpha(palette.surface ?? "#F4F6F8", 0.5),
+				boxShadow: failed ? `inset 3px 0 0 ${palette.danger}` : "none",
+			}),
+			tableCell: { fontSize: "0.82rem", py: 1.1, px: 1.5, color: palette.text },
+			specText: { fontWeight: 600 },
+			refChip: {
+				height: 22,
+				fontSize: "0.65rem",
+				fontWeight: 600,
+				background: alpha(palette.warn, 0.1),
+				color: palette.warn,
+				border: `1px solid ${alpha(palette.warn, 0.28)}`,
+			},
+			resultText: { fontWeight: 700, color: palette.primary },
+			failedResult: { fontWeight: 700, color: palette.danger },
+			remarksText: { fontSize: "0.8rem", color: palette.textSub },
+			certRow: {
+				display: "flex",
+				alignItems: "center",
+				gap: 1,
+				p: 1,
+				borderRadius: 1.5,
+				border: `1px solid ${alpha(palette.border ?? "#D5D8DC", 0.8)}`,
+				"&:hover": { background: alpha(palette.primaryLight, 0.05) },
+			},
+			certLink: { fontSize: "0.82rem", fontWeight: 600, color: palette.primaryLight, textDecoration: "none" },
+			emptyText: { fontSize: "0.85rem", color: palette.textSub, textAlign: "center", py: 4 },
+			loadingBox: { minHeight: 320, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1.5 },
 		},
 	};
 };

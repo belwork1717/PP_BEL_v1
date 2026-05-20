@@ -6,6 +6,7 @@ import getSourcingTheme from "../../../../app/theme/custom_themes/user/sourcing/
 import useRawMaterialProcurementHook from "../../../../hooks/user/sourcing/useRawMaterialProcurementHook";
 import UserWorkflowFormHeader from "../../../components/custom/UserWorkflowFormHeader";
 import RawMaterialBatchList from "./components/RawMaterialBatchList";
+import RawMaterialLotDetailsView from "./components/RawMaterialLotDetailsView";
 import SpecificationFormBuilder from "./components/SpecificationFormBuilder";
 import { STRINGS } from "../../../../app/config/strings";
 
@@ -16,6 +17,10 @@ const RawMaterialProcurement = () => {
   const hookState = useRawMaterialProcurementHook();
   const {
     view,
+    detailsRow,
+    detailsBlocks,
+    loadingDetails,
+    handleBackFromDetails,
     activeBatch,
     isEditMode,
     formEntryMode,
@@ -29,6 +34,12 @@ const RawMaterialProcurement = () => {
     handleBack,
     handleSaveDraft,
     handleSubmit,
+    deleteConfirmOpen,
+    deleteLoading,
+    canDeleteActiveLot,
+    closeDeleteLotConfirm,
+    handleConfirmDeleteLot,
+    handleDeleteLotFromForm,
   } = hookState;
 
   const createLotHeaderHeading =
@@ -43,6 +54,15 @@ const RawMaterialProcurement = () => {
     <Box sx={theme.workflow.animatedContainer}>
       {view === "list" && (
         <RawMaterialBatchList hookState={hookState} />
+      )}
+
+      {view === "details" && detailsRow && (
+        <RawMaterialLotDetailsView
+          row={detailsRow}
+          blocks={detailsBlocks}
+          loading={loadingDetails}
+          onBack={handleBackFromDetails}
+        />
       )}
 
       {view === "form" && activeBatch && (
@@ -61,10 +81,14 @@ const RawMaterialProcurement = () => {
               initialBlocks={formBlocks}
               isEditMode={isEditMode}
               createLotMode={formEntryMode === "create"}
+              lockLotNo={formEntryMode !== "create"}
               onBlocksChange={handleBlocksChange}
               onSaveDraft={handleSaveDraft}
               onSubmit={handleSubmit}
               actionLoading={actionLoading}
+              showDeleteLot={canDeleteActiveLot}
+              onDeleteLot={handleDeleteLotFromForm}
+              deleteLoading={deleteLoading}
             />
           )}
         </Box>
@@ -79,6 +103,17 @@ const RawMaterialProcurement = () => {
         cancelLabel={STRINGS.SOURCING.SPECIFICATION_FORM.UNSAVED_BACK_CONFIRM}
         onConfirm={handleDiscardAndBack}
         onCancel={() => setBackConfirmOpen(false)}
+      />
+
+      <ConfirmAlertDialog
+        open={deleteConfirmOpen}
+        severity="error"
+        title={STRINGS.SOURCING.SPECIFICATION_FORM.CONFIRM_DELETE_TITLE}
+        message={STRINGS.SOURCING.SPECIFICATION_FORM.CONFIRM_DELETE_MESSAGE}
+        confirmLabel={STRINGS.SOURCING.SPECIFICATION_FORM.CONFIRM_DELETE_ACTION}
+        cancelLabel={STRINGS.SOURCING.SPECIFICATION_FORM.CONFIRM_DRAFT_CANCEL_ACTION}
+        onConfirm={handleConfirmDeleteLot}
+        onCancel={closeDeleteLotConfirm}
       />
     </Box>
   );

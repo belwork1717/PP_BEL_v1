@@ -1,4 +1,4 @@
-import { post, put } from "../../httpClient";
+import { del, post, put } from "../../httpClient";
 import { USER_OPERATIONS_ENDPOINTS, USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS } from "../../endPoints";
 
 export const fetchRawMaterialLotListApi = async (payload: Record<string, unknown>) => {
@@ -17,4 +17,8 @@ export const fetchRawMaterialProcurementFormDetailsApi = async (
 
 export const updateRawMaterialProcurementFormApi = async (payload: Record<string, unknown>) => {
   return await put(USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS.UPDATE_FORM, payload);
+};
+
+export const deleteRawMaterialProcurementFormApi = async (payload: { lotId: string }) => {
+  return await del(USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS.DELETE_FORM, { data: payload });
 };

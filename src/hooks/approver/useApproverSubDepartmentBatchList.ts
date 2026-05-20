@@ -4,6 +4,31 @@ import { useApproverListRefreshStore } from "../../app/store/approverListRefresh
 import { useAuthStore } from "../../app/store/authStore";
 import type { ApproverDepartmentKey } from "../../app/theme/approver";
 import { getApproverSubDepartmentBatchList } from "../../controllers/approver/approverController";
+import rawMaterialProcurementApproverController from "../../controllers/approver/rawMaterialProcurementApproverController";
+import rocketMotorCasingApproverController from "../../controllers/approver/rocketMotorCasingApproverController";
+import { mapRawMaterialProcurementApproverListItem } from "../../data/models/approver/RawMaterialProcurementApproverModel";
+import { mapRocketMotorCasingApproverListItem } from "../../data/models/approver/RocketMotorCasingApproverModel";
+import { OPERATION_STATUS } from "../operationStatus";
+
+const RAW_MATERIAL_PROCUREMENT_SUBDEPT = "raw-material";
+const ROCKET_MOTOR_CASING_SUBDEPT = "rocket-motor";
+
+const SOURCING_REMOTE_LIST_SUBDEPTS = new Set([
+  RAW_MATERIAL_PROCUREMENT_SUBDEPT,
+  ROCKET_MOTOR_CASING_SUBDEPT,
+]);
+
+const APPROVER_UI_STATUS_TO_API: Partial<Record<string, string>> = {
+  [OPERATION_STATUS.INITIATED]: "INITIATED",
+  [OPERATION_STATUS.IN_PROGRESS]: "IN_PROGRESS",
+  [OPERATION_STATUS.WAITING_FOR_APPROVAL]: "WAITING_FOR_APPROVAL",
+  [OPERATION_STATUS.APPROVED]: "APPROVED",
+  [OPERATION_STATUS.REJECTED]: "REJECTED",
+};
+
+const toRocketMotorApproverApiStatus = (uiStatus: string) =>
+  APPROVER_UI_STATUS_TO_API[uiStatus] ??
+  uiStatus.trim().toUpperCase().replace(/\s+/g, "_");
 
 type ApproverBatchStatusCounts = {
   initiated?: number;
@@ -141,7 +166,7 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
 
   useEffect(() => {
     setPage(1);
-  }, [status, extraFilters.priority, subDepartment]);
+  }, [status, extraFilters.priority, extraFilters.motorType, subDepartment]);
 
   const selectedSubDepartment = useMemo(() => {
     const deptSlug = DEPARTMENT_SLUGS[department];
@@ -157,7 +182,17 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
     let cancelled = false;
 
     const loadBatches = async () => {
-      if (!selectedSubDepartment?.subDepartmentId || !user?.userId || !subDepartment) {
+      if (!selectedSubDepartment?.subDepartmentId || !subDepartment) {
+        if (!cancelled) {
+          setRemoteBatches([]);
+          setPagination(DEFAULT_PAGINATION);
+          setStatusCounts({ [allLabel]: items.length });
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!SOURCING_REMOTE_LIST_SUBDEPTS.has(subDepartment ?? "") && !user?.userId) {
         if (!cancelled) {
           setRemoteBatches([]);
           setPagination(DEFAULT_PAGINATION);
@@ -169,9 +204,95 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
 
       setLoading(true);
 
+      if (subDepartment === RAW_MATERIAL_PROCUREMENT_SUBDEPT) {
+        const payload = {
+          subDepartmentId: selectedSubDepartment.subDepartmentId,
+          page,
+          limit: DEFAULT_PAGINATION.limit,
+          ...(status !== allLabel ? { status: [status] } : {}),
+          ...(extraFilters.priority && extraFilters.priority !== allLabel
+            ? { priority: [extraFilters.priority] }
+            : {}),
+          ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
+        };
+
+        const response = await rawMaterialProcurementApproverController.fetchLotList(payload);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (response.success && response.data) {
+          const nextLots = response.data.lots ?? [];
+          const nextBatches = nextLots.map((lot, index) =>
+            mapRawMaterialProcurementApproverListItem(lot, index),
+          ) as unknown as ApproverBatchSummary[];
+
+          setRemoteBatches(nextBatches);
+          setPagination({
+            page: response.data.pagination?.page ?? page,
+            limit: response.data.pagination?.limit ?? DEFAULT_PAGINATION.limit,
+            totalRecords: response.data.pagination?.totalRecords ?? nextLots.length,
+            totalPages: response.data.pagination?.totalPages ?? 1,
+          });
+          setStatusCounts(mapStatusCounts(response.data.statusCounts, allLabel, nextBatches));
+        } else {
+          setRemoteBatches([]);
+          setPagination(DEFAULT_PAGINATION);
+          setStatusCounts({ [allLabel]: 0 });
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      if (subDepartment === ROCKET_MOTOR_CASING_SUBDEPT) {
+        const apiStatus = status !== allLabel ? toRocketMotorApproverApiStatus(status) : null;
+
+        const payload = {
+          subDepartmentId: selectedSubDepartment.subDepartmentId,
+          page,
+          limit: DEFAULT_PAGINATION.limit,
+          ...(apiStatus ? { status: [apiStatus] } : {}),
+          ...(extraFilters.motorType && extraFilters.motorType !== allLabel
+            ? { motorStage: [extraFilters.motorType] }
+            : {}),
+          ...(debouncedSearchText ? { search: debouncedSearchText } : {}),
+        };
+
+        const response = await rocketMotorCasingApproverController.fetchCasingList(payload);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (response.success && response.data) {
+          const nextCasings = response.data.casings ?? [];
+          const nextBatches = nextCasings.map((casing, index) =>
+            mapRocketMotorCasingApproverListItem(casing, index),
+          ) as unknown as ApproverBatchSummary[];
+
+          setRemoteBatches(nextBatches);
+          setPagination({
+            page: response.data.pagination?.page ?? page,
+            limit: response.data.pagination?.limit ?? DEFAULT_PAGINATION.limit,
+            totalRecords: response.data.pagination?.totalRecords ?? nextCasings.length,
+            totalPages: response.data.pagination?.totalPages ?? 1,
+          });
+          setStatusCounts(mapStatusCounts(response.data.statusCounts, allLabel, nextBatches));
+        } else {
+          setRemoteBatches([]);
+          setPagination(DEFAULT_PAGINATION);
+          setStatusCounts({ [allLabel]: 0 });
+        }
+
+        setLoading(false);
+        return;
+      }
+
       const payload = {
         subDepartmentId: selectedSubDepartment.subDepartmentId,
-        userId: String(user.userId),
+        userId: String(user!.userId),
         page,
         limit: DEFAULT_PAGINATION.limit,
         ...(status !== allLabel ? { status: [status] } : {}),
@@ -213,7 +334,7 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
     return () => {
       cancelled = true;
     };
-  }, [allLabel, debouncedSearchText, extraFilters.priority, items.length, page, refreshVersion, selectedSubDepartment?.subDepartmentId, status, subDepartment, user?.userId]);
+  }, [allLabel, debouncedSearchText, extraFilters.motorType, extraFilters.priority, items.length, page, refreshVersion, selectedSubDepartment?.subDepartmentId, status, subDepartment, user?.userId]);
 
   const mergedItems = useMemo(() => {
     if (remoteBatches.length === 0) {
@@ -222,6 +343,7 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
 
     if (items.length === 0) {
       return remoteBatches.map((remote, index) => ({
+        ...(remote as Record<string, unknown>),
         id: remote.formId ?? remote.batchId ?? index + 1,
         batchId: remote.batchId ?? "",
         formId: remote.formId ?? null,
@@ -233,8 +355,11 @@ export const useApproverSubDepartmentBatchList = <T extends Record<string, unkno
         status: remote.status ?? "Pending",
         rejectionReason: remote.rejectionReason ?? null,
         assignedTo: remote.assignedTo ?? null,
-        submittedBy: remote.assignedTo?.fullName ?? "NA",
-      })) as T[];
+        submittedBy:
+          (remote as { submittedBy?: string }).submittedBy ??
+          remote.assignedTo?.fullName ??
+          "NA",
+      })) as unknown as T[];
     }
 
     const remoteByKey = new Map<string, ApproverBatchSummary>();

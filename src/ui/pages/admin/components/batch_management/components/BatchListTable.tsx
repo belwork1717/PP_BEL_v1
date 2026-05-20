@@ -2,7 +2,7 @@ import React from "react";
 import {
   Paper, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, TablePagination,
-  Box, Typography, Divider, Chip, Button, Tooltip,
+  Box, Typography, Divider, Chip, Button, Tooltip, IconButton,
 } from "@mui/material";
 
 import { icons } from "../../../../../../app/theme/icons";
@@ -23,10 +23,12 @@ import {
   getPriority,
   getSubDept,
   getSystemManagerLabel,
-  needsImplementationCompletion,
+  isIdentificationSheetDraft,
+  isIdentificationSheetCompleted,
 } from "./BatchConfigs";
 
 const S = STRINGS.BATCH_MANAGEMENT;
+const TA = S.TABLE_ACTIONS;
 
 const BatchListTable = ({
   paginated,
@@ -40,6 +42,7 @@ const BatchListTable = ({
   onEdit,
   onDelete,
   onCompleteImplementation,
+  onViewImplementation,
   onPageChange,
   onRowsPerPageChange,
 }: any) => {
@@ -90,7 +93,8 @@ const BatchListTable = ({
                 const scStage    = stageConfig[stage];
                 const scStatus   = statusConfig[status];
                 const pc         = priorityConfig[priority];
-                const needsImpl   = needsImplementationCompletion(batch);
+                const sheetDraft = isIdentificationSheetDraft(batch);
+                const sheetCompleted = isIdentificationSheetCompleted(batch);
 
                 return (
                   <TableRow key={batch.id || batch.batchId} sx={table.row}>
@@ -155,23 +159,45 @@ const BatchListTable = ({
 
                     {/* Actions */}
                     <TableCell sx={table.cellActionsWrapper}>
-                      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
-                        {needsImpl && onCompleteImplementation && (
-                          <Tooltip title="Complete implementation details">
+                      <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        {sheetDraft && onCompleteImplementation && (
+                          <Tooltip title={TA.COMPLETE_IMPLEMENTATION_TOOLTIP}>
                             <Button
                               size="small"
                               variant="outlined"
+                              color="warning"
                               onClick={() => onCompleteImplementation(batch)}
-                              sx={{ whiteSpace: "nowrap" }}
+                              sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
                             >
-                              Complete
+                              {TA.COMPLETE_IMPLEMENTATION}
                             </Button>
                           </Tooltip>
                         )}
-                        <UserActions
-                          onEdit={() => onEdit(batch)}
-                          onDelete={() => onDelete(batch)}
-                        />
+                        {sheetCompleted && onViewImplementation && (
+                          <Tooltip title={TA.VIEW_DETAILS_TOOLTIP}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => onViewImplementation(batch)}
+                              sx={{ whiteSpace: "nowrap", fontSize: "0.72rem" }}
+                            >
+                              {TA.VIEW_DETAILS}
+                            </Button>
+                          </Tooltip>
+                        )}
+                        {sheetCompleted && (
+                          <UserActions
+                            onEdit={() => onEdit(batch)}
+                            onDelete={() => onDelete(batch)}
+                          />
+                        )}
+                        {sheetDraft && (
+                          <Tooltip title={TA.DELETE_BATCH}>
+                            <IconButton size="small" onClick={() => onDelete(batch)} color="error">
+                              <icons.Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     </TableCell>
 

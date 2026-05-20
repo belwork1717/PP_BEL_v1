@@ -26,6 +26,12 @@ import useRocketMotorCasingApproverHook from "../../../../hooks/approver/sourcin
 import ApproverList from "../components/ApproverList";
 import ApproverActionDialog from "../../../components/custom/ApproverActionDialog";
 import { ReportPreviewDialog } from "../components/ReportPdf";
+import { STRINGS } from "../../../../app/config/strings";
+import getSourcingTheme from "../../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
+import DimensionalInspectionDetailTable from "../../user/sourcing/components/DimensionalInspectionDetailTable";
+
+const BL = STRINGS.SOURCING.BATCH_LIST;
+const MOTOR_TYPE_PREFIX = BL.MOTOR_TYPE_PREFIX;
 
 const {
   approved: CheckCircleRoundedIcon,
@@ -51,6 +57,10 @@ type DetailDialogProps = {
 // ─── Detail Dialog ────────────────────────────────────────────────────────────
 const RocketCasingDetailDialog = ({ open, onClose, item, loading, onApprove, onReject, theme }: DetailDialogProps) => {
   const [pdfOpen, setPdfOpen] = useState(false);
+  const mode = useThemeStore((state) => state.mode);
+  const sourcingTheme = useMemo(() => getSourcingTheme(mode), [mode]);
+  const dimTableTheme = sourcingTheme.sourcing.rocketMotor.casingDetails;
+
   if (!item) return null;
 
   return (
@@ -69,7 +79,7 @@ const RocketCasingDetailDialog = ({ open, onClose, item, loading, onApprove, onR
             <Box>
               <Typography sx={theme.dialog.headerTitle}>Rocket Casing Submission</Typography>
               <Typography sx={theme.dialog.headerSubtitle}>
-                {item.batchId} · {item.motorId}
+                {item.motorCasingId ?? item.batchId} · Stage {item.motorStage ?? item.motorType}
               </Typography>
             </Box>
           </Stack>
@@ -111,32 +121,38 @@ const RocketCasingDetailDialog = ({ open, onClose, item, loading, onApprove, onR
                     </Typography>
                   ) : null}
                 </Stack>
-                <TableContainer sx={theme.dialog.innerTableContainer}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        {(block._columns ?? [
-                          { label: "Section / Parameter" },
-                          { label: "Details" },
-                          { label: "Remarks" },
-                        ]).map((col: any, i: number) => (
-                          <TableCell key={col.label} sx={theme.dialog.innerHeaderCell(i === 0)}>
-                            {col.label}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {block.rows.map((row: any, ri: number) => (
-                        <TableRow key={ri} sx={theme.dialog.innerRow(ri)}>
-                          <TableCell sx={theme.dialog.innerSpecText}>{row.specification}</TableCell>
-                          <TableCell sx={theme.dialog.innerResultText}>{row.analysedResult || "—"}</TableCell>
-                          <TableCell sx={theme.dialog.innerRemarksText}>{row.remarks || "—"}</TableCell>
+                {block.dimensionalTable?.length ? (
+                  <DimensionalInspectionDetailTable rows={block.dimensionalTable} dt={dimTableTheme} />
+                ) : block.rows?.length ? (
+                  <TableContainer sx={theme.dialog.innerTableContainer}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          {(block._columns ?? [
+                            { label: "Section / Parameter" },
+                            { label: "Details" },
+                            { label: "Remarks" },
+                          ]).map((col: any, i: number) => (
+                            <TableCell key={col.label} sx={theme.dialog.innerHeaderCell(i === 0)}>
+                              {col.label}
+                            </TableCell>
+                          ))}
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </TableHead>
+                      <TableBody>
+                        {block.rows.map((row: any, ri: number) => (
+                          <TableRow key={ri} sx={theme.dialog.innerRow(ri)}>
+                            <TableCell sx={theme.dialog.innerSpecText}>{row.specification}</TableCell>
+                            <TableCell sx={theme.dialog.innerResultText}>{row.analysedResult || "—"}</TableCell>
+                            <TableCell sx={theme.dialog.innerRemarksText}>{row.remarks || "—"}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                ) : (
+                  <Typography sx={theme.dialog.emptyText}>No records in this section.</Typography>
+                )}
               </Box>
             ))
           ) : (
@@ -174,10 +190,10 @@ const RocketCasingDetailDialog = ({ open, onClose, item, loading, onApprove, onR
       <ReportPreviewDialog
         open={pdfOpen}
         onClose={() => setPdfOpen(false)}
-        formId={item.formId}
+        formId={item.motorCasingId ?? item.batchId}
         department="sourcing"
         subDepartment="rocket-motor"
-        dialogTitle={`Casing Report — ${item.batchId}`}
+        dialogTitle={`Casing Report — ${item.motorCasingId ?? item.batchId}`}
       />
     </>
   );
@@ -190,23 +206,35 @@ const RocketMotorApproverPage = () => {
   const theme = useMemo(() => getRocketMotorCasingApproverTheme(mode), [mode]);
 
   const {
-    items, selected, detailsLoading, dialogProps,
-    requestApprove, requestReject,
-    handleViewDetails, handleCloseDetail,
-    statusMeta, priorityMeta,
+    selected,
+    detailsLoading,
+    dialogProps,
+    requestApprove,
+    requestReject,
+    handleViewDetails,
+    handleCloseDetail,
+    statusMeta,
+    priorityMeta,
   } = useRocketMotorCasingApproverHook();
 
   return (
     <ApproverList
       department="sourcing"
       subDepartment="rocket-motor"
-      items={items}
       statusField="status"
       statusMeta={statusMeta}
-      searchKeys={["batchId", "motorId", "submittedBy"]}
+      searchKeys={[
+        "motorCasingId",
+        "procurementId",
+        "motorStage",
+        "motorNo",
+        "casingType",
+        "insulationType",
+        "submittedBy",
+      ]}
       filterFields={[
         { field: "priority", label: "Priority", options: ["Critical", "High", "Medium", "Low"] },
-        { field: "motorType", label: "Type", options: ["A", "B", "C"] },
+        { field: "motorType", label: "Motor stage", options: ["A", "B", "C"] },
       ]}
     >
       {(filtered) => (
@@ -216,7 +244,17 @@ const RocketMotorApproverPage = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    {["Batch ID", "Batch Type", "Motor ID", "Motor Type", "Submitted By", "Date", "Priority", "Status"].map((h) => (
+                    {[
+                      BL.COL_MOTOR_CASING_ID,
+                      BL.COL_PROCUREMENT_ID,
+                      BL.COL_MOTOR_TYPE,
+                      BL.COL_MOTOR_ID,
+                      BL.COL_BATCH_TYPE,
+                      BL.COL_CREATED_BY,
+                      BL.COL_CREATED_ON,
+                      BL.COL_PRIORITY,
+                      BL.COL_STAGE_STATUS,
+                    ].map((h) => (
                       <TableCell key={h} sx={theme.table.headerCell}>{h}</TableCell>
                     ))}
                     <TableCell sx={{ ...theme.table.headerCell, textAlign: "center" }}>Action</TableCell>
@@ -224,16 +262,25 @@ const RocketMotorApproverPage = () => {
                 </TableHead>
                 <TableBody>
                   {filtered.map((row: any, idx: number) => (
-                    <TableRow key={row.id ?? row.formId ?? row.batchId ?? idx} sx={theme.table.row(idx)}>
+                    <TableRow key={row.motorCasingId ?? row.id ?? row.formId ?? idx} sx={theme.table.row(idx)}>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Typography sx={theme.table.batchIdText}>{row.batchId}</Typography>
+                        <Typography sx={theme.table.batchIdText}>{row.motorCasingId ?? row.batchId}</Typography>
                       </TableCell>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Chip label={row.batchType} size="small" sx={theme.chips.type} />
+                        <Typography sx={theme.table.subtleText}>{row.procurementId ?? row.formId ?? "—"}</Typography>
                       </TableCell>
-                      <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.subtleText }}>{row.motorId}</TableCell>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Chip label={`Type ${row.motorType}`} size="small" sx={theme.chips.type} />
+                        <Chip
+                          label={`${MOTOR_TYPE_PREFIX}${row.motorStage ?? row.motorType ?? "—"}`}
+                          size="small"
+                          sx={theme.chips.type}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.subtleText }}>
+                        {row.motorNo ?? row.motorId ?? "—"}
+                      </TableCell>
+                      <TableCell sx={theme.table.bodyCell}>
+                        <Chip label={row.casingType ?? row.batchType ?? "—"} size="small" sx={theme.chips.type} />
                       </TableCell>
                       <TableCell sx={theme.table.bodyCell}>{row.submittedBy}</TableCell>
                       <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.dateText }}>

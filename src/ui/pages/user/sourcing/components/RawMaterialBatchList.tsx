@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { alpha, Box, Button, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import {
+  alpha,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  IconButton,
+  MenuItem,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
@@ -15,6 +28,7 @@ import UserWorkflowStatusCell from "../../../../components/custom/UserWorkflowSt
 import { useThemeStore } from "../../../../../app/store/themeStore";
 import getSourcingTheme from "../../../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
+import { canDeleteRawMaterialLot } from "../../../../../data/models/user/RawMaterialProcurementModel";
 import { STRINGS } from "../../../../../app/config/strings";
 import type { RawMaterialLotListAdvancedFilters } from "../../../../../hooks/user/sourcing/useRawMaterialLotList";
 
@@ -43,6 +57,11 @@ const STATUS_DROPDOWN_VALUES = [FILTER_ALL, ...Object.values(OPERATION_STATUS)] 
 /** Lot metadata edit — only for drafts not yet in workflow filling */
 const canShowEditLotButton = (status: string) => status === OPERATION_STATUS.INITIATED;
 
+const canViewLotDetails = (status: string) =>
+  status === OPERATION_STATUS.WAITING_FOR_APPROVAL || status === OPERATION_STATUS.APPROVED;
+
+const { visibility: VisibilityRoundedIcon } = icons.user.sourcing.rawMaterialBatchList;
+
 const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
   const mode = useThemeStore((state) => state.mode);
   const theme = useMemo(() => getSourcingTheme(mode), [mode]);
@@ -62,6 +81,8 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     loading,
     handleFillForm,
     handleEditLot,
+    handleDeleteLotFromList,
+    handleViewLotDetails,
     handleCreateLot,
     materialOptions,
     materialsLoading,
@@ -471,23 +492,58 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         }
         renderAction={(row: any) => (
           <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" flexWrap="wrap">
-            <UserWorkflowStatusAction
-              status={row.rmStatus}
-              row={row}
-              statusMap={OPERATION_STATUS}
-              onFillForm={handleFillForm}
-              onEditForm={handleEditLot}
-              theme={theme}
-              fillLabel={STRINGS.SOURCING.BATCH_LIST.FILL_ACTION}
-              continueLabel={STRINGS.SOURCING.BATCH_LIST.CONTINUE_ACTION}
-              continueUsesPrimaryStyle
-              editLabel={STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
-              editTooltip={STRINGS.SOURCING.BATCH_LIST.EDIT_ACTION_TOOLTIP}
-            />
+            {canViewLotDetails(row.rmStatus) ? (
+              <Tooltip title={STRINGS.SOURCING.BATCH_LIST.VIEW_LOT_DETAILS_TOOLTIP} arrow placement="top">
+                <IconButton
+                  size="small"
+                  onClick={() => handleViewLotDetails(row)}
+                  aria-label={STRINGS.SOURCING.BATCH_LIST.VIEW_LOT_DETAILS}
+                  sx={{
+                    color: theme.palette.primaryLight,
+                    border: `1px solid ${alpha(theme.palette.primaryLight, 0.35)}`,
+                    borderRadius: 1.5,
+                    "&:hover": { background: alpha(theme.palette.primaryLight, 0.08) },
+                  }}
+                >
+                  <VisibilityRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <UserWorkflowStatusAction
+                status={row.rmStatus}
+                row={row}
+                statusMap={OPERATION_STATUS}
+                onFillForm={handleFillForm}
+                onEditForm={handleEditLot}
+                theme={theme}
+                fillLabel={STRINGS.SOURCING.BATCH_LIST.FILL_ACTION}
+                continueLabel={STRINGS.SOURCING.BATCH_LIST.CONTINUE_ACTION}
+                continueUsesPrimaryStyle
+                editLabel={STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
+                editTooltip={STRINGS.SOURCING.BATCH_LIST.EDIT_ACTION_TOOLTIP}
+              />
+            )}
             {canShowEditLotButton(row.rmStatus) && (
               <Button variant="outlined" size="small" onClick={() => handleEditLot(row)} sx={theme.batchList.action.secondary}>
                 {STRINGS.SOURCING.BATCH_LIST.EDIT_LOT}
               </Button>
+            )}
+            {canDeleteRawMaterialLot(row.rmStatus) && (
+              <Tooltip title={STRINGS.SOURCING.BATCH_LIST.DELETE_LOT_TOOLTIP} arrow placement="top">
+                <IconButton
+                  size="small"
+                  onClick={() => handleDeleteLotFromList(row)}
+                  sx={{
+                    color: theme.palette.danger,
+                    border: `1px solid ${alpha(theme.palette.danger, 0.35)}`,
+                    borderRadius: 1.5,
+                    "&:hover": { background: alpha(theme.palette.danger, 0.08) },
+                  }}
+                  aria-label={STRINGS.SOURCING.BATCH_LIST.DELETE_LOT}
+                >
+                  <DeleteOutlineRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
           </Stack>
         )}

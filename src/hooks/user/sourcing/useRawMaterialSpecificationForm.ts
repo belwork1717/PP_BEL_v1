@@ -5,7 +5,22 @@ import { useThemeStore } from "../../../app/store/themeStore";
 import getSourcingTheme from "../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { operationsController } from "../../../controllers/user/operationsController";
 import { MaterialSpecificationItemModel } from "../../../data/models/user/MaterialSpecificationModel";
-import type { MaterialBlock, SpecRow } from "../../../data/models/user/RawMaterialProcurementModel";
+import type {
+  MaterialBlock,
+  MaterialFormGroup,
+  MaterialLotBlock,
+  SpecRow,
+} from "../../../data/models/user/RawMaterialProcurementModel";
+import {
+  computeIsOutOfRange,
+  flattenMaterialGroups,
+  groupBlocksToMaterialGroups,
+} from "../../../data/models/user/RawMaterialProcurementModel";
+import {
+  areAllAnalyzedResultsFilled,
+  areBlocksMandatoryComplete,
+  areMaterialGroupsMandatoryComplete,
+} from "../../../data/models/user/rawMaterialProcurementValidation";
 
 export type SpecificationRow = SpecRow;
 export type SpecificationBlock = MaterialBlock;
@@ -28,35 +43,68 @@ type UseRawMaterialSpecificationFormParams = {
   pdfMeta?: unknown;
 };
 
+function specRowsFromApi(targetSpecs: MaterialSpecificationItemModel[] = []): SpecRow[] {
+  return targetSpecs.map((specification) => ({
+    specificationCode: specification.specificationCode,
+    specification: specification.specificationName,
+    specificationName: specification.specificationName,
+    refRange: specification.formattedReferenceRange,
+    analysedResult: "",
+    remarks: "",
+    isOutOfRange: false,
+    referenceRange: {
+      minValue: specification.referenceRange.minValue,
+      maxValue: specification.referenceRange.maxValue,
+      unit: specification.referenceRange.unit,
+    },
+  }));
+}
+
+function createLotFromSpecs(targetSpecs: MaterialSpecificationItemModel[] = []): MaterialLotBlock {
+  return {
+    lotNo: "",
+    certificates: [],
+    rows: specRowsFromApi(targetSpecs),
+  };
+}
+
 function createBlock(material: string, targetSpecs: MaterialSpecificationItemModel[] = []): SpecificationBlock {
+  const lot = createLotFromSpecs(targetSpecs);
   return {
     material,
-    lotNo: "",
+    lotNo: lot.lotNo,
     supplyOrderNo: "",
     receiptDate: "",
     manufacturerName: "",
+    certificates: lot.certificates,
+    rows: lot.rows,
+  };
+}
+
+function createMaterialGroup(material: string, targetSpecs: MaterialSpecificationItemModel[] = []): MaterialFormGroup {
+  return {
+    material,
+    supplyOrderNo: "",
+    receiptDate: "",
+    manufacturerName: "",
+    lots: [createLotFromSpecs(targetSpecs)],
+  };
+}
+
+function cloneLotTemplate(templateRows: SpecRow[]): MaterialLotBlock {
+  return {
+    lotNo: "",
     certificates: [],
-    rows: targetSpecs.map((specification) => ({
-      specificationCode: specification.specificationCode,
-      specification: specification.specificationName,
-      specificationName: specification.specificationName,
-      refRange: specification.formattedReferenceRange,
+    rows: templateRows.map((row) => ({
+      ...row,
       analysedResult: "",
       remarks: "",
+      status: null,
       isOutOfRange: false,
-      referenceRange: {
-        minValue: specification.referenceRange.minValue,
-        maxValue: specification.referenceRange.maxValue,
-        unit: specification.referenceRange.unit,
-      },
     })),
   };
 }
 
-function hasMinimumData(blocks: SpecificationBlock[]) {
-  if (blocks.length === 0) return false;
-  return blocks.every((block) => block.rows.some((row) => row.analysedResult.trim() !== ""));
-}
 
 type SpecificationCacheMap = Record<string, MaterialSpecificationItemModel[]>;
 type LoadingMap = Record<string, boolean>;
@@ -70,10 +118,12 @@ export const useRawMaterialSpecificationForm = ({
   onBlocksChange,
   actionLoading = false,
 }: UseRawMaterialSpecificationFormParams) => {
-  const [blocks, setBlocks] = useState<SpecificationBlock[]>([]);
+  const [flatBlocks, setFlatBlocks] = useState<SpecificationBlock[]>([]);
+  const [materialGroups, setMaterialGroups] = useState<MaterialFormGroup[]>([]);
   const [selectedMaterial, setSelectedMaterial] = useState("");
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [draftConfirm, setDraftConfirm] = useState(false);
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const [availableMaterials, setAvailableMaterials] = useState<MaterialOption[]>([]);
   const [loadingMaterials, setLoadingMaterials] = useState(true);
   const [addingMaterial, setAddingMaterial] = useState(false);
@@ -89,6 +139,11 @@ export const useRawMaterialSpecificationForm = ({
 
   const headerTitle = createLotMode ? formStrings.CREATE_LOT_BUILDER_TITLE : formStrings.TITLE;
   const headerSubtitle = createLotMode ? formStrings.CREATE_LOT_BUILDER_SUBTITLE : formStrings.SUBTITLE;
+
+  const blocks = useMemo(
+    () => (createLotMode ? flattenMaterialGroups(materialGroups) : flatBlocks),
+    [createLotMode, flatBlocks, materialGroups]
+  );
 
   const isMaterialLoading = useCallback(
     (materialCode: string) => Boolean(loadingByMaterial[materialCode]),
@@ -173,15 +228,37 @@ export const useRawMaterialSpecificationForm = ({
   /** Only hydrate from parent when parent has rows (e.g. opened lot / edit). Never clear local blocks when parent is still [] on create — that was wiping in‑progress materials. */
   useLayoutEffect(() => {
     if (initialBlocks.length === 0) return;
-    setBlocks((previous) => (previous === initialBlocks ? previous : initialBlocks));
-  }, [initialBlocks]);
+    if (createLotMode) {
+      setMaterialGroups((previous) => {
+        const next = groupBlocksToMaterialGroups(initialBlocks);
+        return previous === next ? previous : next;
+      });
+    } else {
+      setFlatBlocks((previous) => (previous === initialBlocks ? previous : initialBlocks));
+    }
+  }, [createLotMode, initialBlocks]);
 
   const blocksRef = useRef<SpecificationBlock[]>([]);
   blocksRef.current = blocks;
 
+  const syncFlattenedBlocks = useCallback((nextBlocks: SpecificationBlock[]) => {
+    onBlocksChangeRef.current?.(nextBlocks);
+  }, []);
+
+  const updateMaterialGroups = useCallback(
+    (updater: MaterialFormGroup[] | ((previous: MaterialFormGroup[]) => MaterialFormGroup[])) => {
+      setMaterialGroups((previous) => {
+        const nextGroups = typeof updater === "function" ? updater(previous) : updater;
+        syncFlattenedBlocks(flattenMaterialGroups(nextGroups));
+        return nextGroups;
+      });
+    },
+    [syncFlattenedBlocks]
+  );
+
   const updateBlocks = useCallback(
     (updater: SpecificationBlock[] | ((previous: SpecificationBlock[]) => SpecificationBlock[])) => {
-      setBlocks((previous) => {
+      setFlatBlocks((previous) => {
         const nextBlocks = typeof updater === "function" ? updater(previous) : updater;
         onBlocksChangeRef.current?.(nextBlocks);
         return nextBlocks;
@@ -190,20 +267,79 @@ export const useRawMaterialSpecificationForm = ({
     []
   );
 
+  const usedMaterialCodes = useMemo(
+    () => new Set(materialGroups.map((g) => g.material)),
+    [materialGroups]
+  );
+
+  const selectableMaterials = useMemo(
+    () =>
+      createLotMode
+        ? availableMaterials.filter((m) => !usedMaterialCodes.has(m.materialCode))
+        : availableMaterials,
+    [availableMaterials, createLotMode, usedMaterialCodes]
+  );
+
+  const materialCount = createLotMode ? materialGroups.length : blocks.length;
+  const lotCount = createLotMode
+    ? materialGroups.reduce((sum, g) => sum + g.lots.length, 0)
+    : blocks.length;
+
   const totalRows = useMemo(() => blocks.flatMap((block) => block.rows).length, [blocks]);
   const filledRows = useMemo(
     () => blocks.flatMap((block) => block.rows).filter((row) => row.analysedResult.trim() !== "").length,
     [blocks]
   );
-  const canSubmit = useMemo(() => hasMinimumData(blocks), [blocks]);
-  const hasBlocks = blocks.length > 0;
+  const hasBlocks = createLotMode ? materialGroups.length > 0 : blocks.length > 0;
+
+  const mandatoryComplete = useMemo(
+    () =>
+      createLotMode ? areMaterialGroupsMandatoryComplete(materialGroups) : areBlocksMandatoryComplete(blocks),
+    [blocks, createLotMode, materialGroups]
+  );
+
+  const allAnalyzedFilled = useMemo(() => areAllAnalyzedResultsFilled(blocks), [blocks]);
+
+  const canSaveDraft = useMemo(
+    () => hasBlocks && mandatoryComplete && allAnalyzedFilled,
+    [allAnalyzedFilled, hasBlocks, mandatoryComplete]
+  );
+
+  const canSubmit = canSaveDraft;
+  const allMaterialsAdded = createLotMode && !loadingMaterials && selectableMaterials.length === 0 && availableMaterials.length > 0;
+
   const actionHelperText = useMemo(() => {
     if (!hasBlocks) {
       return formStrings.NOT_READY_TITLE;
     }
+    if (!mandatoryComplete || !allAnalyzedFilled) {
+      return formStrings.MANDATORY_FIELDS_PENDING;
+    }
+
+    if (createLotMode) {
+      return `${materialCount} ${materialCount > 1 ? formStrings.MATERIAL_SUFFIX_PLURAL : formStrings.MATERIAL_SUFFIX} · ${lotCount} ${lotCount > 1 ? formStrings.LOT_SUFFIX_PLURAL : formStrings.LOT_SUFFIX} · ${filledRows}/${totalRows} ${formStrings.RESULTS_ENTERED_SUFFIX}`;
+    }
 
     return `${blocks.length} ${blocks.length > 1 ? formStrings.MATERIAL_SUFFIX_PLURAL : formStrings.MATERIAL_SUFFIX} · ${filledRows}/${totalRows} ${formStrings.RESULTS_ENTERED_SUFFIX}`;
-  }, [blocks.length, filledRows, formStrings.MATERIAL_SUFFIX, formStrings.MATERIAL_SUFFIX_PLURAL, formStrings.NOT_READY_TITLE, formStrings.RESULTS_ENTERED_SUFFIX, hasBlocks, totalRows]);
+  }, [
+    blocks.length,
+    createLotMode,
+    filledRows,
+    formStrings.LOT_SUFFIX,
+    formStrings.LOT_SUFFIX_PLURAL,
+    formStrings.MATERIAL_SUFFIX,
+    formStrings.MATERIAL_SUFFIX_PLURAL,
+    formStrings.NOT_READY_TITLE,
+    formStrings.RESULTS_ENTERED_SUFFIX,
+    hasBlocks,
+    lotCount,
+    allAnalyzedFilled,
+    mandatoryComplete,
+    materialCount,
+    totalRows,
+    formStrings.MANDATORY_FIELDS_PENDING,
+  ]);
+
   const disableActionBar = actionLoading || !hasBlocks;
 
   const handleAdd = useCallback(async () => {
@@ -215,16 +351,87 @@ export const useRawMaterialSpecificationForm = ({
       const specifications = await fetchMaterialSpecifications(selectedMaterial);
       if (!specifications.length) return;
 
-      updateBlocks((previous) => [...previous, createBlock(selectedMaterial, specifications)]);
+      if (createLotMode) {
+        updateMaterialGroups((previous) => [...previous, createMaterialGroup(selectedMaterial, specifications)]);
+      } else {
+        updateBlocks((previous) => [...previous, createBlock(selectedMaterial, specifications)]);
+      }
       setSelectedMaterial("");
     } finally {
       setAddingMaterial(false);
     }
-  }, [addingMaterial, fetchMaterialSpecifications, selectedMaterial, updateBlocks]);
+  }, [addingMaterial, createLotMode, fetchMaterialSpecifications, selectedMaterial, updateBlocks, updateMaterialGroups]);
+
+  const handleAddLot = useCallback(
+    (materialIndex: number) => {
+      updateMaterialGroups((previous) =>
+        previous.map((group, idx) => {
+          if (idx !== materialIndex) return group;
+          const template = group.lots[0]?.rows ?? [];
+          return { ...group, lots: [...group.lots, cloneLotTemplate(template)] };
+        })
+      );
+    },
+    [updateMaterialGroups]
+  );
+
+  const handleUpdateMaterial = useCallback(
+    (materialIndex: number, partial: Partial<Pick<MaterialFormGroup, "supplyOrderNo" | "receiptDate" | "manufacturerName">>) => {
+      updateMaterialGroups((previous) =>
+        previous.map((group, idx) => (idx === materialIndex ? { ...group, ...partial } : group))
+      );
+    },
+    [updateMaterialGroups]
+  );
+
+  const handleUpdateLot = useCallback(
+    (materialIndex: number, lotIndex: number, lot: MaterialLotBlock) => {
+      updateMaterialGroups((previous) =>
+        previous.map((group, gIdx) => {
+          if (gIdx !== materialIndex) return group;
+          return {
+            ...group,
+            lots: group.lots.map((existing, lIdx) => (lIdx === lotIndex ? lot : existing)),
+          };
+        })
+      );
+    },
+    [updateMaterialGroups]
+  );
+
+  const handleRemoveMaterial = useCallback(
+    (materialIndex: number) => {
+      updateMaterialGroups((previous) => previous.filter((_, idx) => idx !== materialIndex));
+    },
+    [updateMaterialGroups]
+  );
+
+  const handleRemoveLot = useCallback(
+    (materialIndex: number, lotIndex: number) => {
+      updateMaterialGroups((previous) =>
+        previous.map((group, gIdx) => {
+          if (gIdx !== materialIndex || group.lots.length <= 1) return group;
+          return { ...group, lots: group.lots.filter((_, lIdx) => lIdx !== lotIndex) };
+        })
+      );
+    },
+    [updateMaterialGroups]
+  );
 
   const handleUpdateBlock = useCallback(
     (index: number, updatedBlock: SpecificationBlock) => {
-      updateBlocks((previous) => previous.map((block, currentIndex) => (currentIndex === index ? updatedBlock : block)));
+      const rowsWithRange = updatedBlock.rows.map((row) => {
+        if (row.analysedResult === undefined) return row;
+        return {
+          ...row,
+          isOutOfRange: computeIsOutOfRange(row.analysedResult, row.referenceRange),
+        };
+      });
+      updateBlocks((previous) =>
+        previous.map((block, currentIndex) =>
+          currentIndex === index ? { ...updatedBlock, rows: rowsWithRange } : block
+        )
+      );
     },
     [updateBlocks]
   );
@@ -237,12 +444,20 @@ export const useRawMaterialSpecificationForm = ({
   );
 
   const openDraftConfirm = useCallback(() => {
-    if (!hasBlocks || actionLoading) return;
+    if (actionLoading || !hasBlocks) return;
+    if (!canSaveDraft) {
+      setShowFieldErrors(true);
+      return;
+    }
     setDraftConfirm(true);
-  }, [actionLoading, hasBlocks]);
+  }, [actionLoading, canSaveDraft, hasBlocks]);
 
   const openSubmitConfirm = useCallback(() => {
-    if (!canSubmit || actionLoading) return;
+    if (actionLoading) return;
+    if (!canSubmit) {
+      setShowFieldErrors(true);
+      return;
+    }
     setSubmitConfirm(true);
   }, [actionLoading, canSubmit]);
 
@@ -267,9 +482,13 @@ export const useRawMaterialSpecificationForm = ({
   return {
     actionHelperText,
     addingMaterial,
+    allMaterialsAdded,
     availableMaterials,
     blocks,
     canSubmit,
+    canSaveDraft,
+    showFieldErrors,
+    mandatoryComplete,
     closeDraftConfirm,
     closeSubmitConfirm,
     createLotMode,
@@ -278,18 +497,28 @@ export const useRawMaterialSpecificationForm = ({
     filledRows,
     formStrings,
     handleAdd,
+    handleAddLot,
     handleConfirmDraft,
     handleConfirmSubmit,
     handleRemoveBlock,
+    handleRemoveLot,
+    handleRemoveMaterial,
     handleUpdateBlock,
+    handleUpdateLot,
+    handleUpdateMaterial,
     hasBlocks,
     headerSubtitle,
     headerTitle,
     isEditMode,
     isMaterialLoading,
     loadingMaterials,
+    lotCount,
+    materialCount,
+    materialGroups,
+    mode,
     openDraftConfirm,
     openSubmitConfirm,
+    selectableMaterials,
     selectedMaterial,
     setSelectedMaterial,
     specStyles,

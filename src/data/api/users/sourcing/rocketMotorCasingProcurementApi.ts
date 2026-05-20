@@ -1,4 +1,4 @@
-import { post, put } from "../../httpClient";
+import { del, post, put } from "../../httpClient";
 import { USER_ROCKET_MOTOR_CASING_ENDPOINTS } from "../../endPoints";
 
 export type RocketMotorCasingListRequest = {
@@ -28,4 +28,8 @@ export const updateRocketMotorCasingFormApi = async (payload: Record<string, unk
 
 export const fetchRocketMotorCasingListApi = async (payload: RocketMotorCasingListRequest) => {
   return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.CASING_LIST, payload);
+};
+
+export const deleteRocketMotorCasingFormApi = async (payload: { motorCasingId: string }) => {
+  return await del(USER_ROCKET_MOTOR_CASING_ENDPOINTS.DELETE_FORM, { data: payload });
 };

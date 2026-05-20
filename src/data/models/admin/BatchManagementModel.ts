@@ -238,7 +238,7 @@ export class CreateBatchPayload implements BatchWritePayload {
         : String(form.motorType?.motorTypeName ?? "").trim();
     const motorTypeId = inferMotorTypeId(
       motorTypeName,
-      typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined
+      form.motorTypeId ?? (typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined)
     );
     this.motorType = { motorTypeId: motorTypeId, motorTypeName: motorTypeName };
 
@@ -293,7 +293,7 @@ export class UpdateBatchPayload implements BatchWritePayload {
         : String(form.motorType?.motorTypeName ?? "").trim();
     const motorTypeId = inferMotorTypeId(
       motorTypeName,
-      typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined
+      form.motorTypeId ?? (typeof form.motorType === "object" ? form.motorType?.motorTypeId : undefined)
     );
     this.motorType = { motorTypeId: motorTypeId, motorTypeName: motorTypeName };
 

@@ -1,133 +1,125 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { STRINGS } from "../../../app/config/strings";
 import { useAlertStore } from "../../../app/store/alertStore";
-import { APPROVER_STATUS_META, APPROVER_PRIORITY_META } from "../../../app/theme/approver";
-import useApproverFormAction from "../useApproverFormAction";
+import { useAuthStore } from "../../../app/store/authStore";
+import { useApproverListRefreshStore } from "../../../app/store/approverListRefreshStore";
+import {
+  APPROVER_STATUS_META,
+  APPROVER_PRIORITY_META,
+  isApproverActionableStatus,
+} from "../../../app/theme/approver";
 import rocketMotorCasingController from "../../../controllers/user/sourcing/rocketMotorCasingController";
+import rocketMotorCasingApproverController from "../../../controllers/approver/rocketMotorCasingApproverController";
+import type { ApproverFormActionType } from "../../../data/api/approver/approverApi";
 import { RocketMotorCasingDetailsModel } from "../../../data/models/user/RocketMotorCasingProcurementModel";
-import type { RocketFormData } from "../../../hooks/user/sourcing/sourcingWorkflowData";
 
 const DEPARTMENT_SLUG = "sourcing";
 const SUB_DEPARTMENT_SLUG = "rocket-motor";
 
 const S = STRINGS.SOURCING.CASING_FORM;
+const A = STRINGS.APPROVER.ACTION;
 
-const DETAIL_COLS = [
-  { key: "specification", label: "Section / Parameter", width: "35%" },
-  { key: "analysedResult", label: "Details", width: "35%" },
-  { key: "remarks", label: "Remarks", width: "30%" },
-];
-
-const mapFormDataToCasingBlocks = (cd: RocketFormData) => {
-  const insulationRows = [
-    { specification: "Tensile Strength", analysedResult: cd.tensileStrengthDetails || "—", remarks: cd.tensileStrengthRemarks || "—" },
-    { specification: "Elongation", analysedResult: cd.elongationDetails || "—", remarks: cd.elongationRemarks || "—" },
-    { specification: "Erosion Rate", analysedResult: cd.erosionRateDetails || "—", remarks: cd.erosionRateRemarks || "—" },
-    { specification: "Thermal Conductivity", analysedResult: cd.thermalConductivityDetails || "—", remarks: cd.thermalConductivityRemarks || "—" },
-    { specification: "UT / NDT Report", analysedResult: cd.utNdtDetails || "—", remarks: cd.utNdtRemarks || "—" },
-  ];
-
-  const blocks: any[] = [
-    {
-      material: "Motor casing",
-      lotNo: cd.motorCasingId || "—",
-      rows: [
-        { specification: "Motor stage", analysedResult: cd.motorStageApi || "—", remarks: "—" },
-        { specification: "Motor no.", analysedResult: cd.motorNoApi || "—", remarks: "—" },
-        {
-          specification: "Items received",
-          analysedResult: `${cd.itemsDescription || "—"} · ${cd.itemsDimension || "—"} ${cd.itemsUnit || ""}`.trim(),
-          remarks: "—",
-        },
-      ],
-      _columns: DETAIL_COLS,
-    },
-    {
-      material: "Motor & Clearance",
-      lotNo: "",
-      rows: [
-        { specification: "Motor ID (legacy / notes)", analysedResult: cd.motorIdDetails || "—", remarks: cd.motorIdRemarks || "—" },
-        { specification: "Motor Clearance Report", analysedResult: cd.motorClearanceDetails || "—", remarks: cd.motorClearanceRemarks || "—" },
-      ],
-      _columns: DETAIL_COLS,
-    },
-    {
-      material: "Insulation report",
-      lotNo: "",
-      rows: insulationRows,
-      _columns: DETAIL_COLS,
-    },
-  ];
-
-  if (cd.waiversDetails) {
-    blocks.push({
-      material: "Waivers if Any",
-      lotNo: "",
-      rows: [{ specification: "Waiver Ref.", analysedResult: cd.waiversDetails, remarks: cd.waiversRemarks || "—" }],
-      _columns: DETAIL_COLS,
-    });
-  }
-
-  if (cd.mediaFilePath) {
-    blocks.push({
-      material: "Visual Observation",
-      lotNo: "",
-      rows: [
-        {
-          specification: "File Reference",
-          analysedResult: typeof cd.mediaFilePath === "string" ? cd.mediaFilePath : cd.mediaFilePath?.name || "—",
-          remarks: "—",
-        },
-      ],
-      _columns: DETAIL_COLS,
-    });
-  }
-
-  blocks.push({
-    material: "Weighment",
-    lotNo: "",
-    rows: [
-      {
-        specification: "Weight without harness (kg)",
-        analysedResult: cd.weightWithoutHarness || "—",
-        remarks: "—",
-      },
-      {
-        specification: "Weight with harness (kg)",
-        analysedResult: cd.weightWithHarness || "—",
-        remarks: cd.calibrationRef ? `Calibration: ${cd.calibrationRef}` : "—",
-      },
-    ],
-    _columns: DETAIL_COLS,
-  });
-
-  const dimRows =
-    cd.dimensionalData?.length > 0
-      ? cd.dimensionalData.map((d: any) => ({
-          specification: d.paramName || d.paramId || "—",
-          analysedResult: `T-B: ${d.tb ?? "—"}  R-L: ${d.rl ?? "—"}  TL-BR: ${d.tlbr ?? "—"}  TR-BL: ${d.trbl ?? "—"}`,
-          remarks: d.remarks || "—",
-        }))
-      : [{ specification: "No dimensional data recorded", analysedResult: "—", remarks: "—" }];
-
-  blocks.push({ material: "Dimensional Inspection Report", lotNo: "", rows: dimRows, _columns: DETAIL_COLS });
-
-  return blocks;
-};
+const getResponseMessage = (response: { message?: string; errorCode?: string | null }) =>
+  response.message || response.errorCode || A.FAILED;
 
 export const useRocketMotorCasingApproverHook = () => {
+  const user = useAuthStore((state) => state.user);
   const showAlert = useAlertStore((state) => state.showAlert);
-  const [items, setItems] = useState<any[]>([]);
+  const bumpListVersion = useApproverListRefreshStore((state) => state.bumpVersion);
   const [selected, setSelected] = useState<any | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
 
-  const { dialogProps, requestApprove, requestReject } = useApproverFormAction({
-    department: DEPARTMENT_SLUG,
-    setItems,
-    setSelected,
-    subDepartment: SUB_DEPARTMENT_SLUG,
-  });
+  const [actionType, setActionType] = useState<ApproverFormActionType | null>(null);
+  const [dialogItem, setDialogItem] = useState<any | null>(null);
+  const [dialogValue, setDialogValue] = useState("");
+  const [dialogError, setDialogError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const subDepartmentId = useMemo(
+    () =>
+      user?.allSubDepartments.find(
+        (sd) => sd.slugs?.dept === DEPARTMENT_SLUG && sd.slugs?.subDept === SUB_DEPARTMENT_SLUG,
+      )?.subDepartmentId ?? null,
+    [user],
+  );
+
+  const closeDialog = () => {
+    if (submitting) return;
+    setActionType(null);
+    setDialogItem(null);
+    setDialogValue("");
+    setDialogError("");
+  };
+
+  const requestAction = (item: any, nextActionType: ApproverFormActionType) => {
+    if (!subDepartmentId) {
+      showAlert(A.SUBDEPARTMENT_MISSING, "error", { autoCloseMs: 3000 });
+      return;
+    }
+
+    const motorCasingId = String(item?.motorCasingId ?? item?.batchId ?? "").trim();
+    const procurementId = String(item?.procurementId ?? item?.formId ?? "").trim();
+
+    if (!motorCasingId || !procurementId) {
+      showAlert(A.FORM_ID_MISSING, "error", { autoCloseMs: 3000 });
+      return;
+    }
+
+    if (!isApproverActionableStatus(item.status)) {
+      showAlert(A.INVALID_STATUS, "warning", { autoCloseMs: 3000 });
+      return;
+    }
+
+    setActionType(nextActionType);
+    setDialogItem(item);
+    setDialogValue(
+      nextActionType === "REJECTED" ? String(item.rejectionReason ?? "") : String(item.remarks ?? ""),
+    );
+    setDialogError("");
+  };
+
+  const handleConfirm = async () => {
+    if (!dialogItem || !actionType || !subDepartmentId) return;
+
+    const trimmedValue = dialogValue.trim();
+    const motorCasingId = String(dialogItem?.motorCasingId ?? dialogItem?.batchId ?? "").trim();
+    const procurementId = String(dialogItem?.procurementId ?? dialogItem?.formId ?? "").trim();
+
+    if (actionType === "REJECTED" && !trimmedValue) {
+      setDialogError(A.REJECTION_REASON_REQUIRED);
+      return;
+    }
+
+    if (!motorCasingId || !procurementId) {
+      showAlert(A.FORM_ID_MISSING, "error", { autoCloseMs: 3000 });
+      return;
+    }
+
+    setSubmitting(true);
+    showAlert(actionType === "APPROVED" ? A.APPROVING : A.REJECTING, "info", { loading: true });
+
+    const response = await rocketMotorCasingApproverController.changeStatus({
+      procurementId,
+      motorCasingId,
+      subDepartmentId,
+      actionType,
+      remarks: actionType === "APPROVED" ? trimmedValue || null : null,
+      rejectionReason: actionType === "REJECTED" ? trimmedValue : null,
+    });
+
+    setSubmitting(false);
+
+    if (response.success) {
+      setSelected(null);
+      closeDialog();
+      bumpListVersion();
+      showAlert(getResponseMessage(response), "success", { autoCloseMs: 2000 });
+      return;
+    }
+
+    showAlert(getResponseMessage(response), "error", { autoCloseMs: 3500 });
+  };
 
   const handleViewDetails = async (row: any) => {
     setSelected({ ...row, casingBlocks: [] });
@@ -155,14 +147,14 @@ export const useRocketMotorCasingApproverHook = () => {
     }
 
     const model = response.data as RocketMotorCasingDetailsModel;
-    const cd = RocketMotorCasingDetailsModel.toFormData(model);
 
     setSelected({
       ...row,
-      batchId: motorCasingId,
       motorCasingId,
-      formId: row.formId ?? model.motorCasingId,
-      casingBlocks: mapFormDataToCasingBlocks(cd),
+      procurementId: row.procurementId ?? model.formId ?? "",
+      batchId: motorCasingId,
+      formId: model.formId ?? row.procurementId ?? "",
+      casingBlocks: RocketMotorCasingDetailsModel.toDetailBlocks(model),
     });
   };
 
@@ -172,12 +164,26 @@ export const useRocketMotorCasingApproverHook = () => {
   };
 
   return {
-    items,
     selected,
     detailsLoading,
-    dialogProps,
-    requestApprove,
-    requestReject,
+    dialogProps: {
+      actionType,
+      batchId: dialogItem?.motorCasingId ?? dialogItem?.batchId ?? null,
+      idLabel: STRINGS.APPROVER.ACTION.MOTOR_CASING_ID_LABEL,
+      confirmDisabled: actionType === "REJECTED" ? dialogValue.trim().length === 0 : false,
+      helperText: dialogError,
+      onCancel: closeDialog,
+      onConfirm: handleConfirm,
+      onValueChange: (value: string) => {
+        setDialogValue(value);
+        if (dialogError) setDialogError("");
+      },
+      open: Boolean(actionType && dialogItem),
+      submitting,
+      value: dialogValue,
+    },
+    requestApprove: (item: any) => requestAction(item, "APPROVED"),
+    requestReject: (item: any) => requestAction(item, "REJECTED"),
     handleViewDetails,
     handleCloseDetail,
     statusMeta: APPROVER_STATUS_META,

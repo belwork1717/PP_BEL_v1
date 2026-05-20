@@ -15,6 +15,8 @@ import { STRINGS } from "../../../app/config/strings";
 type ApproverActionDialogProps = {
   actionType: ApproverFormActionType | null;
   batchId?: string | null;
+  /** Label shown above the identifier (defaults to Batch ID). */
+  idLabel?: string;
   confirmDisabled?: boolean;
   helperText?: string;
   onCancel: () => void;
@@ -28,6 +30,7 @@ type ApproverActionDialogProps = {
 const ApproverActionDialog = ({
   actionType,
   batchId,
+  idLabel = STRINGS.APPROVER.ACTION.BATCH_ID_LABEL,
   confirmDisabled = false,
   helperText,
   onCancel,
@@ -49,7 +52,7 @@ const ApproverActionDialog = ({
         {batchId ? (
           <Box sx={{ mb: 2 }}>
             <Typography sx={{ fontSize: "0.75rem", fontWeight: 700, color: "text.secondary", textTransform: "uppercase" }}>
-              Batch ID
+              {idLabel}
             </Typography>
             <Typography sx={{ fontSize: "0.92rem", fontWeight: 600 }}>{batchId}</Typography>
           </Box>

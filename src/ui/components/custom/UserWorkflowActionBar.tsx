@@ -16,6 +16,12 @@ type UserWorkflowActionBarProps = {
   resubmitLabel?: string;
   saveTooltip?: string;
   disableActions?: boolean;
+  /** When false, Save as Draft stays disabled (defaults to same as submit when omitted). */
+  canSaveDraft?: boolean;
+  /** When true, only Submit is disabled (defaults to disableActions). */
+  disableSubmit?: boolean;
+  /** When true, only Save as Draft is disabled (defaults to disableActions). */
+  disableSaveDraft?: boolean;
 };
 
 const UserWorkflowActionBar = ({
@@ -32,7 +38,13 @@ const UserWorkflowActionBar = ({
   resubmitLabel = "Resubmit for Approval",
   saveTooltip = "Save progress and continue later",
   disableActions = false,
+  canSaveDraft,
+  disableSubmit,
+  disableSaveDraft,
 }: UserWorkflowActionBarProps) => {
+  const saveEnabled = canSaveDraft ?? canSubmit;
+  const saveDisabled = disableSaveDraft ?? disableActions;
+  const submitDisabled = disableSubmit ?? disableActions;
   return (
     <Box sx={theme.workflow.actionBar.container}>
       <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between" gap={2}>
@@ -42,10 +54,18 @@ const UserWorkflowActionBar = ({
         </Box>
 
         <Stack direction="row" gap={1.5} flexShrink={0}>
-          <Tooltip title={saveTooltip} arrow placement="top">
-            <Button variant="outlined" startIcon={<SaveOutlinedIcon />} onClick={onSaveDraft} disabled={disableActions} sx={theme.workflow.actionBar.saveButton}>
-              {saveLabel}
-            </Button>
+          <Tooltip title={!saveEnabled ? pendingText : saveTooltip} arrow placement="top">
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<SaveOutlinedIcon />}
+                onClick={onSaveDraft}
+                disabled={!saveEnabled || saveDisabled}
+                sx={theme.workflow.actionBar.saveButton}
+              >
+                {saveLabel}
+              </Button>
+            </span>
           </Tooltip>
 
           <Tooltip title={!canSubmit ? pendingText : ""} arrow placement="top">
@@ -53,7 +73,7 @@ const UserWorkflowActionBar = ({
               <Button
                 variant="contained"
                 startIcon={<SendRoundedIcon />}
-                disabled={!canSubmit || disableActions}
+                disabled={!canSubmit || submitDisabled}
                 onClick={onSubmitClick}
                 sx={theme.workflow.actionBar.submitButton}
               >

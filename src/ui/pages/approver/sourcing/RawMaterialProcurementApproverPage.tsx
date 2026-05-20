@@ -26,6 +26,9 @@ import useRawMaterialApproverHook from "../../../../hooks/approver/sourcing/useR
 import ApproverList from "../components/ApproverList";
 import ApproverActionDialog from "../../../components/custom/ApproverActionDialog";
 import { ReportPreviewDialog } from "../components/ReportPdf";
+import { STRINGS } from "../../../../app/config/strings";
+
+const BL = STRINGS.SOURCING.BATCH_LIST;
 
 const {
   approved: CheckCircleRoundedIcon,
@@ -61,7 +64,7 @@ const RawMaterialDetailDialog = ({ open, onClose, item, loading, onApprove, onRe
             <Box>
               <Typography sx={theme.dialog.headerTitle}>Raw Material Submission</Typography>
               <Typography sx={theme.dialog.headerSubtitle}>
-                {item.batchId} · {item.motorId}
+                {item.lotId ?? item.batchId} · {item.materialName ?? item.materialCode}
               </Typography>
             </Box>
           </Stack>
@@ -154,10 +157,10 @@ const RawMaterialDetailDialog = ({ open, onClose, item, loading, onApprove, onRe
       <ReportPreviewDialog
         open={pdfOpen}
         onClose={() => setPdfOpen(false)}
-        formId={item.formId}
+        formId={item.lotId ?? item.batchId}
         department="sourcing"
         subDepartment="raw-material"
-        dialogTitle={`Raw Material Report — ${item.batchId}`}
+        dialogTitle={`Raw Material Report — ${item.lotId ?? item.batchId}`}
       />
     </>
   );
@@ -170,7 +173,6 @@ const RawMaterialApproverPage = () => {
   const theme = useMemo(() => getRawMaterialApproverTheme(mode), [mode]);
 
   const {
-    items,
     selected,
     detailsLoading,
     dialogProps,
@@ -186,13 +188,11 @@ const RawMaterialApproverPage = () => {
     <ApproverList
       department="sourcing"
       subDepartment="raw-material"
-      items={items}
       statusField="status"
       statusMeta={statusMeta}
-      searchKeys={["batchId", "motorId", "submittedBy"]}
+      searchKeys={["lotId", "procurementId", "materialCode", "materialName", "supplyOrderNo", "manufacturerName", "submittedBy"]}
       filterFields={[
         { field: "priority", label: "Priority", options: ["Critical", "High", "Medium", "Low"] },
-        { field: "motorType", label: "Type", options: ["A", "B", "C"] },
       ]}
     >
       {(filtered) => (
@@ -202,7 +202,7 @@ const RawMaterialApproverPage = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    {["Batch ID", "Batch Type", "Motor ID", "Motor Type", "Submitted By", "Date", "Priority", "Status"].map((h) => (
+                    {[BL.COL_LOT_ID, BL.COL_PROCUREMENT_ID, BL.COL_MATERIAL_CODE, BL.COL_MATERIAL_NAME, BL.COL_SUPPLY_ORDER, BL.COL_CREATED_BY, BL.COL_CREATED_ON, BL.COL_PRIORITY, BL.COL_RM_STATUS].map((h) => (
                       <TableCell key={h} sx={theme.table.headerCell}>{h}</TableCell>
                     ))}
                     <TableCell sx={{ ...theme.table.headerCell, textAlign: "center" }}>Action</TableCell>
@@ -210,16 +210,21 @@ const RawMaterialApproverPage = () => {
                 </TableHead>
                 <TableBody>
                   {filtered.map((row: any, idx: number) => (
-                    <TableRow key={row.id ?? row.formId ?? row.batchId ?? idx} sx={theme.table.row(idx)}>
+                    <TableRow key={row.lotId ?? row.id ?? row.formId ?? idx} sx={theme.table.row(idx)}>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Typography sx={theme.table.batchIdText}>{row.batchId}</Typography>
+                        <Typography sx={theme.table.batchIdText}>{row.lotId ?? row.batchId}</Typography>
                       </TableCell>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Chip label={row.batchType} size="small" sx={theme.chips.type} />
+                        <Typography sx={theme.table.subtleText}>{row.procurementId ?? "—"}</Typography>
                       </TableCell>
-                      <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.subtleText }}>{row.motorId}</TableCell>
                       <TableCell sx={theme.table.bodyCell}>
-                        <Chip label={`Type ${row.motorType}`} size="small" sx={theme.chips.type} />
+                        <Chip label={row.materialCode ?? row.batchType} size="small" sx={theme.chips.type} />
+                      </TableCell>
+                      <TableCell sx={theme.table.bodyCell}>
+                        <Typography sx={{ fontSize: "0.82rem" }}>{row.materialName ?? "—"}</Typography>
+                      </TableCell>
+                      <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.subtleText }}>
+                        {row.supplyOrderNo ?? "—"}
                       </TableCell>
                       <TableCell sx={theme.table.bodyCell}>{row.submittedBy}</TableCell>
                       <TableCell sx={{ ...theme.table.bodyCell, ...theme.table.dateText }}>

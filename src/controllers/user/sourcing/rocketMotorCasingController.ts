@@ -3,24 +3,19 @@ import {
   RocketMotorCasingDetailsModel,
   RocketMotorCasingSubmitResponseModel,
 } from "../../../data/models/user/RocketMotorCasingProcurementModel";
+import type { RocketMotorCasingDeletePayload } from "../../../data/models/user/RocketMotorCasingProcurementModel";
+import type { RocketMotorCasingFormPayload } from "../../../data/models/user/RocketMotorCasingFormModel";
 import {
   createRocketMotorCasingFormApi,
+  deleteRocketMotorCasingFormApi,
   fetchRocketMotorCasingFormDetailsApi,
   fetchRocketMotorCasingListApi,
   type RocketMotorCasingListRequest,
   updateRocketMotorCasingFormApi,
 } from "../../../data/api/users/sourcing/rocketMotorCasingProcurementApi";
 
-export type RocketMotorCasingCreatePayload = {
-  subDepartmentId: number;
-  motorStage: string;
-  motorNo: string;
-  motorCasingId: string;
-  formSubmissionType: "DRAFT" | "SUBMIT";
-  sections: Record<string, unknown>;
-};
-
-export type RocketMotorCasingUpdatePayload = RocketMotorCasingCreatePayload;
+export type RocketMotorCasingCreatePayload = RocketMotorCasingFormPayload;
+export type RocketMotorCasingUpdatePayload = RocketMotorCasingFormPayload;
 
 export type RocketMotorCasingDetailsPayload = {
   motorCasingId: string;
@@ -69,6 +64,16 @@ export const rocketMotorCasingController = {
       );
     } catch (error) {
       console.error("Failed to update rocket motor casing form:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  deleteForm: async (payload: RocketMotorCasingDeletePayload) => {
+    try {
+      const response = await deleteRocketMotorCasingFormApi(payload);
+      return new ApiResponseModel(response);
+    } catch (error) {
+      console.error("Failed to delete rocket motor casing form:", error);
       return new ApiResponseModel(error);
     }
   },

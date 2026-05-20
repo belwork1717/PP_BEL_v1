@@ -4,11 +4,15 @@ import {
   fetchMaterialSpecificationListApi,
   fetchDimensionalParametersListApi,
   fetchSolidProcessesListApi,
+  fetchMotorsStageListApi,
+  fetchApprovedMotorsListApi,
 } from "../../data/api/users/operationsApi";
 import { ApiResponseModel } from "../../data/models/common/ApiResponseModel";
 import { MaterialSpecificationListModel } from "../../data/models/user/MaterialSpecificationModel";
 import {
   DimensionalParametersListModel,
+  MotorsStageListModel,
+  AvailableMotorsListModel,
   SolidProcessesListModel,
 } from "../../data/models/user/SubdepartmentCommonModel";
 
@@ -104,6 +108,34 @@ export const operationsController = {
       console.error("Failed to fetch solid processes list:", error);
       return new ApiResponseModel(error);
     }
-  }
+  },
+
+  /**
+   * Motor stages for batch create/edit (project-motor mapping).
+   */
+  fetchMotorsStageList: async (params?: { projectId?: string }) => {
+    try {
+      const response = await fetchMotorsStageListApi(params);
+      return new ApiResponseModel<MotorsStageListModel>(response, (res) =>
+        MotorsStageListModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch motors stage list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /** Approved motor casings for batch create (by project + motor stage). */
+  fetchApprovedMotorsList: async (payload: { projectId: string; motorStage: string }) => {
+    try {
+      const response = await fetchApprovedMotorsListApi(payload);
+      return new ApiResponseModel<AvailableMotorsListModel>(response, (res) =>
+        AvailableMotorsListModel.fromApi(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch approved motors list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
 };
 

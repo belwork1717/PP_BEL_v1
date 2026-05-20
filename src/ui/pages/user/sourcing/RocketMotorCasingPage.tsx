@@ -1,4 +1,4 @@
-import { Box } from "@mui/material";
+import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { useMemo } from "react";
 import ConfirmAlertDialog from "../../../components/common/ConfirmAlertDialog";
 import { useThemeStore } from "../../../../app/store/themeStore";
@@ -6,8 +6,9 @@ import getSourcingTheme from "../../../../app/theme/custom_themes/user/sourcing/
 import useRocketMotorCasingHook from "../../../../hooks/user/sourcing/useRocketMotorCasingHook";
 import UserWorkflowActionBar from "../../../components/custom/UserWorkflowActionBar";
 import UserWorkflowFormHeader from "../../../components/custom/UserWorkflowFormHeader";
-import CasingDetailsForm from "./components/CasingDetailsForm";
+import MotorCasingCreateForm from "./components/casing/MotorCasingCreateForm";
 import RocketMotorBatchList from "./components/RocketMotorBatchList";
+import RocketMotorCasingDetailsView from "./components/RocketMotorCasingDetailsView";
 import { STRINGS } from "../../../../app/config/strings";
 
 const RocketMotorCasing = () => {
@@ -17,70 +18,130 @@ const RocketMotorCasing = () => {
   const hookState = useRocketMotorCasingHook();
   const {
     view,
+    detailsRow,
+    detailsBlocks,
+    loadingDetails,
+    handleBackFromDetails,
+    formEntryMode,
     activeBatch,
     isEditMode,
-    formData,
+    casingForm,
+    setCasingForm,
     loadingFormDetails,
     actionLoading,
     dimensionalParameters,
     dimensionalParametersErrorMessage,
     isDimensionalParamsLoading,
+    fetchingMotorParams,
+    resolvedMotorStage,
+    lookups,
     backConfirmOpen,
+    canSubmit,
+    canSaveDraft,
     submitConfirm,
     draftConfirm,
     setBackConfirmOpen,
     setSubmitConfirm,
     setDraftConfirm,
-    handleChange,
-    handleMediaChange,
-    handleDimChange,
     handleBack,
     handleDiscardAndBack,
     handleConfirmDraft,
     handleConfirmSubmit,
+    deleteConfirmOpen,
+    deleteLoading,
+    canDeleteActiveCasing,
+    closeDeleteCasingConfirm,
+    handleConfirmDeleteCasing,
+    handleDeleteCasingFromForm,
   } = hookState;
+
+  const createMotorCasingHeaderHeading =
+    !isEditMode && formEntryMode === "create"
+      ? {
+          title: STRINGS.SOURCING.CASING.FORM_HEADER_CREATE_MOTOR_CASING_TITLE,
+          subtitle: STRINGS.SOURCING.CASING.FORM_HEADER_CREATE_MOTOR_CASING_SUBTITLE,
+        }
+      : undefined;
+
+  const loadingDimensionalParams =
+    Boolean(resolvedMotorStage) &&
+    (fetchingMotorParams || isDimensionalParamsLoading(resolvedMotorStage));
+
+  const lockIdentification =
+    formEntryMode === "edit" ||
+    (formEntryMode === "fill" && Boolean(String(casingForm.projectId ?? "").trim()));
 
   return (
     <Box sx={theme.workflow.animatedContainer}>
       {view === "list" && (
-        <RocketMotorBatchList
-          hookState={hookState}
-          rowsPerPageOptions={[5, 10, 25]}
+        <RocketMotorBatchList hookState={hookState} rowsPerPageOptions={[5, 10, 25]} />
+      )}
+
+      {view === "details" && detailsRow && (
+        <RocketMotorCasingDetailsView
+          row={detailsRow}
+          blocks={detailsBlocks}
+          loading={loadingDetails}
+          onBack={handleBackFromDetails}
         />
       )}
 
       {view === "form" && activeBatch && (
         <Box>
           <UserWorkflowFormHeader
-            batch={activeBatch}
+            batch={{
+              lotId: activeBatch.batchId,
+              batchId: activeBatch.batchId,
+              motorId: activeBatch.motorId,
+              motorType: activeBatch.motorType || casingForm.motorStageApi,
+              priority: activeBatch.priority,
+              rejectionReason: activeBatch.rejectionReason,
+            }}
             isEdit={isEditMode}
             onBack={handleBack}
-            newLabel={activeBatch.rmStatus === "In Progress" ? STRINGS.SOURCING.CASING.CONTINUING_DRAFT : STRINGS.SOURCING.CASING.NEW_SUBMISSION}
+            newLabel={
+              activeBatch.rmStatus === "In Progress"
+                ? STRINGS.SOURCING.CASING.CONTINUING_DRAFT
+                : STRINGS.SOURCING.CASING.NEW_SUBMISSION
+            }
+            batchHeadingOverride={createMotorCasingHeaderHeading}
             includeMotorType
             theme={theme}
           />
 
-          {!loadingFormDetails && !isDimensionalParamsLoading(activeBatch.motorType || "") && (
+          {loadingFormDetails ? (
+            <Box sx={theme.workflow.loadingContainer}>
+              <Stack alignItems="center" spacing={1.5}>
+                <CircularProgress size={32} sx={{ color: theme.palette.primaryLight }} />
+                <Typography sx={{ fontSize: "0.82rem", color: theme.palette.textSub, fontWeight: 600 }}>
+                  {STRINGS.SOURCING.CASING_FORM.LOADING_FORM_DETAILS}
+                </Typography>
+              </Stack>
+            </Box>
+          ) : (
             <>
-              <CasingDetailsForm
-                formData={formData}
-                onChange={handleChange}
-                onMediaChange={handleMediaChange}
-                onDimChange={handleDimChange}
-                dimensionalParameters={dimensionalParameters}
-                dimensionalParametersErrorMessage={dimensionalParametersErrorMessage}
-                motorType={activeBatch.motorType}
-                isEditMode={isEditMode}
-              />
+              <Box sx={{ mt: 2.5 }}>
+                <MotorCasingCreateForm
+                  key={activeBatch.batchId ?? activeBatch.motorCasingId ?? "new-casing"}
+                  form={casingForm}
+                  setForm={setCasingForm}
+                  lookups={lookups}
+                  dimensionalParameters={dimensionalParameters}
+                  dimensionalParametersErrorMessage={dimensionalParametersErrorMessage}
+                  motorStage={resolvedMotorStage}
+                  loadingDimensionalParams={loadingDimensionalParams}
+                  lockIdentification={lockIdentification}
+                  showDeleteCasing={canDeleteActiveCasing}
+                  onDeleteCasing={handleDeleteCasingFromForm}
+                  deleteLoading={deleteLoading}
+                  theme={theme}
+                />
+              </Box>
 
               <UserWorkflowActionBar
                 isEdit={isEditMode}
-                canSubmit={Boolean(
-                  String(formData.motorCasingId ?? "").trim() &&
-                    String(formData.motorStageApi || activeBatch.motorStage || "").trim() &&
-                    String(formData.motorNoApi || activeBatch.motorNo || "").trim() &&
-                    String(formData.itemsDescription ?? "").trim()
-                )}
+                canSubmit={canSubmit}
+                canSaveDraft={canSaveDraft}
                 readinessText={STRINGS.SOURCING.CASING_FORM.READY_TO_SUBMIT}
                 pendingText={STRINGS.SOURCING.CASING_FORM.NOT_READY_TO_SUBMIT}
                 helperText={STRINGS.SOURCING.CASING_FORM.ACTION_HELPER}
@@ -89,6 +150,7 @@ const RocketMotorCasing = () => {
                 resubmitLabel={STRINGS.SOURCING.CASING_FORM.RESUBMIT_APPROVAL}
                 saveTooltip={STRINGS.SOURCING.CASING_FORM.SAVE_TOOLTIP}
                 disableActions={actionLoading}
+                disableSubmit={actionLoading || loadingDimensionalParams}
                 onSaveDraft={() => setDraftConfirm(true)}
                 onSubmitClick={() => setSubmitConfirm(true)}
                 theme={theme}
@@ -112,13 +174,21 @@ const RocketMotorCasing = () => {
       <ConfirmAlertDialog
         open={submitConfirm}
         severity="warning"
-        title={isEditMode ? STRINGS.SOURCING.CASING_FORM.CONFIRM_RESUBMIT_TITLE : STRINGS.SOURCING.CASING_FORM.CONFIRM_SUBMIT_TITLE}
+        title={
+          isEditMode
+            ? STRINGS.SOURCING.CASING_FORM.CONFIRM_RESUBMIT_TITLE
+            : STRINGS.SOURCING.CASING_FORM.CONFIRM_SUBMIT_TITLE
+        }
         message={
           isEditMode
             ? STRINGS.SOURCING.CASING_FORM.CONFIRM_RESUBMIT_MESSAGE
             : STRINGS.SOURCING.CASING_FORM.CONFIRM_SUBMIT_MESSAGE
         }
-        confirmLabel={isEditMode ? STRINGS.SOURCING.CASING_FORM.CONFIRM_RESUBMIT_ACTION : STRINGS.SOURCING.CASING_FORM.CONFIRM_SUBMIT_ACTION}
+        confirmLabel={
+          isEditMode
+            ? STRINGS.SOURCING.CASING_FORM.CONFIRM_RESUBMIT_ACTION
+            : STRINGS.SOURCING.CASING_FORM.CONFIRM_SUBMIT_ACTION
+        }
         cancelLabel={STRINGS.SOURCING.CASING_FORM.CONFIRM_CANCEL_ACTION}
         onConfirm={handleConfirmSubmit}
         onCancel={() => setSubmitConfirm(false)}
@@ -133,6 +203,17 @@ const RocketMotorCasing = () => {
         cancelLabel={STRINGS.SOURCING.CASING_FORM.UNSAVED_BACK_CONFIRM}
         onConfirm={handleDiscardAndBack}
         onCancel={() => setBackConfirmOpen(false)}
+      />
+
+      <ConfirmAlertDialog
+        open={deleteConfirmOpen}
+        severity="error"
+        title={STRINGS.SOURCING.CASING_FORM.CONFIRM_DELETE_TITLE}
+        message={STRINGS.SOURCING.CASING_FORM.CONFIRM_DELETE_MESSAGE}
+        confirmLabel={STRINGS.SOURCING.CASING_FORM.CONFIRM_DELETE_ACTION}
+        cancelLabel={STRINGS.SOURCING.CASING_FORM.CONFIRM_DRAFT_CANCEL_ACTION}
+        onConfirm={handleConfirmDeleteCasing}
+        onCancel={closeDeleteCasingConfirm}
       />
     </Box>
   );

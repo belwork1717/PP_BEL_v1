@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Chip,
+  FormHelperText,
   IconButton,
   List,
   ListItem,
@@ -25,13 +26,21 @@ import { fileUtils } from "../../../../../utils/FileUtils";
 import StackRow from "../../../../components/common/StackRow";
 import type { LotCertificate } from "../../../../../data/models/user/RawMaterialProcurementModel";
 import {
+  computeIsOutOfRange,
+  isSpecRowFailed,
+} from "../../../../../data/models/user/RawMaterialProcurementModel";
+import {
   SpecificationBlock,
   SpecificationRow,
 } from "../../../../../hooks/user/sourcing/useRawMaterialSpecificationForm";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import dayjs from "dayjs";
+import ReceiptDateField from "./ReceiptDateField";
+import MandatoryFormField, { mandatoryAsteriskSx, mandatoryFieldInputSx } from "./MandatoryFormField";
+import {
+  getLotFieldErrors,
+  getMaterialMetaErrors,
+  isAnalyzedResultMissing,
+  type MandatoryValidationMessages,
+} from "../../../../../data/models/user/rawMaterialProcurementValidation";
 
 const {
   delete: DeleteOutlineRoundedIcon,
@@ -77,8 +86,14 @@ type MaterialSpecificationBlockProps = {
   block: SpecificationBlock;
   index: number;
   createLotMode?: boolean;
+  lockLotNo?: boolean;
+  showDeleteLot?: boolean;
+  onDeleteLot?: () => void;
+  deleteLoading?: boolean;
   onUpdate: (index: number, updatedBlock: SpecificationBlock) => void;
   onRemove: (index: number) => void;
+  showFieldErrors?: boolean;
+  validationMessages: MandatoryValidationMessages;
   theme: any;
 };
 
@@ -89,9 +104,15 @@ function useMaterialBlockState(
 ) {
   const handleCellChange = useCallback(
     (rowIndex: number, field: keyof SpecificationRow, value: string) => {
-      const updatedRows = block.rows.map((row, currentIndex) =>
-        currentIndex !== rowIndex ? row : { ...row, [field]: value }
-      );
+      const updatedRows = block.rows.map((row, currentIndex) => {
+        if (currentIndex !== rowIndex) return row;
+        const next = { ...row, [field]: value };
+        if (field === "analysedResult") {
+          next.status = null;
+          next.isOutOfRange = computeIsOutOfRange(value, row.referenceRange);
+        }
+        return next;
+      });
       onUpdate(index, { ...block, rows: updatedRows });
     },
     [block, index, onUpdate]
@@ -159,12 +180,20 @@ const MaterialSpecificationBlock = ({
   block,
   index,
   createLotMode = false,
+  lockLotNo = false,
+  showDeleteLot = false,
+  onDeleteLot,
+  deleteLoading = false,
   onUpdate,
   onRemove,
+  showFieldErrors = false,
+  validationMessages,
   theme,
 }: MaterialSpecificationBlockProps) => {
   const formStrings = STRINGS.SOURCING.SPECIFICATION_FORM;
   const specStyles = theme.sourcing.rawMaterial.specificationForm;
+  const metaErrors = getMaterialMetaErrors(block, validationMessages, showFieldErrors);
+  const lotErrors = getLotFieldErrors(block, validationMessages, showFieldErrors);
   const {
     allFilled,
     filledCount,
@@ -235,73 +264,67 @@ const MaterialSpecificationBlock = ({
             size="small"
             sx={specStyles.progressChip(allFilled)}
           />
-          <Tooltip title={formStrings.REMOVE_BLOCK_TOOLTIP}>
-            <IconButton size="small" onClick={() => onRemove(index)} sx={specStyles.removeIconButton}>
-              <DeleteOutlineRoundedIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {showDeleteLot && onDeleteLot ? (
+            <Tooltip title={formStrings.DELETE_LOT_TOOLTIP} arrow placement="top">
+              <span>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={<DeleteOutlineRoundedIcon />}
+                  onClick={onDeleteLot}
+                  disabled={deleteLoading}
+                  sx={{ textTransform: "none", fontWeight: 700, borderRadius: 2, flexShrink: 0 }}
+                >
+                  {formStrings.DELETE_LOT}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            <Tooltip title={formStrings.REMOVE_BLOCK_TOOLTIP}>
+              <IconButton size="small" onClick={() => onRemove(index)} sx={specStyles.removeIconButton}>
+                <DeleteOutlineRoundedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </StackRow>
       </Box>
 
       <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ px: 2, py: 1.5 }}>
-        <Box flex={1}>
-          <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.SUPPLY_ORDER_LABEL}</Typography>
+        <MandatoryFormField label={formStrings.SUPPLY_ORDER_LABEL} error={metaErrors.supplyOrderNo} theme={theme}>
           <TextField
             size="small"
             fullWidth
+            variant="outlined"
             value={block.supplyOrderNo ?? ""}
             onChange={(e) => handleBlockMeta("supplyOrderNo", e.target.value)}
-            sx={theme.workflow.formElements.textField}
+            error={Boolean(metaErrors.supplyOrderNo)}
+            sx={mandatoryFieldInputSx(theme.workflow.formElements.metaRowTextField, Boolean(metaErrors.supplyOrderNo), theme)}
           />
-        </Box>
-        <Box flex={1}>
-          <Typography sx={theme.workflow.formElements.fieldLabel}>
-            {formStrings.RECEIPT_DATE_LABEL}
-          </Typography>
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <DatePicker
-              format="DD-MM-YYYY"
-              value={block.receiptDate ? dayjs(block.receiptDate, "DD-MM-YYYY") : null}
-              onChange={(v) => handleBlockMeta("receiptDate", v?.format("DD-MM-YYYY") || "")}
-              slotProps={{
-                textField: {
-                  size: "small",
-                  fullWidth: true,
-                  placeholder: "DD-MM-YYYY",
-                  variant: "outlined",
-                  sx: {
-                    ...theme.workflow.formElements.textField,
-                    "& .MuiInputBase-root": {
-                      ...(theme.workflow.formElements.textField?.["& .MuiInputBase-root"] || {}),
-                    },
-                    "& .MuiInputAdornment-root": {
-                      marginLeft: 0,
-                      "& .MuiIconButton-root": {
-                        padding: "2px",
-                        marginRight: "-2px",
-                        color: alpha(theme.palette.text, 0.5),
-                      },
-                    },
-                    "& .MuiInputBase-input": {
-                      py: 1,
-                      ...(theme.workflow.formElements.textField?.["& .MuiInputBase-input"] || {}),
-                    },
-                  },
-                },
-              }}
-            />
-          </LocalizationProvider>
-        </Box>
-        <Box flex={1}>
-          <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.MANUFACTURER_LABEL}</Typography>
+        </MandatoryFormField>
+        <MandatoryFormField label={formStrings.RECEIPT_DATE_LABEL} error={metaErrors.receiptDate} theme={theme}>
+          <ReceiptDateField
+            value={block.receiptDate ?? ""}
+            onChange={(next) => handleBlockMeta("receiptDate", next)}
+            theme={theme}
+            error={Boolean(metaErrors.receiptDate)}
+          />
+        </MandatoryFormField>
+        <MandatoryFormField label={formStrings.MANUFACTURER_LABEL} error={metaErrors.manufacturerName} theme={theme}>
           <TextField
             size="small"
             fullWidth
+            variant="outlined"
             value={block.manufacturerName ?? ""}
             onChange={(e) => handleBlockMeta("manufacturerName", e.target.value)}
-            sx={theme.workflow.formElements.textField}
+            error={Boolean(metaErrors.manufacturerName)}
+            sx={mandatoryFieldInputSx(
+              theme.workflow.formElements.metaRowTextField,
+              Boolean(metaErrors.manufacturerName),
+              theme
+            )}
           />
-        </Box>
+        </MandatoryFormField>
       </Stack>
 
       <TableContainer
@@ -321,6 +344,10 @@ const MaterialSpecificationBlock = ({
               </TableCell>
               <TableCell sx={{ ...theme.workflow.formElements.tableHeader, ...specStyles.tableHeader.lotBatch }}>
                 {createLotMode ? formStrings.TABLE_HEADERS.LOT_ID : formStrings.TABLE_HEADERS.LOT_BATCH_NO}
+                <Box component="span" sx={mandatoryAsteriskSx(theme)}>
+                  {" "}
+                  *
+                </Box>
               </TableCell>
               <TableCell sx={{ ...theme.workflow.formElements.tableHeader, ...specStyles.tableHeader.specification }}>
                 {formStrings.TABLE_HEADERS.SPECIFICATION}
@@ -330,6 +357,10 @@ const MaterialSpecificationBlock = ({
               </TableCell>
               <TableCell sx={{ ...theme.workflow.formElements.tableHeader, ...specStyles.tableHeader.analysedResult }}>
                 {formStrings.TABLE_HEADERS.ANALYZED_RESULT}
+                <Box component="span" sx={mandatoryAsteriskSx(theme)}>
+                  {" "}
+                  *
+                </Box>
               </TableCell>
               <TableCell sx={{ ...theme.workflow.formElements.tableHeader, ...specStyles.tableHeader.remarks }}>
                 {formStrings.TABLE_HEADERS.REMARKS}
@@ -337,29 +368,69 @@ const MaterialSpecificationBlock = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {block.rows.map((row, rowIndex) => (
-              <TableRow key={rowIndex} sx={specStyles.dataRow(rowIndex)}>
+            {block.rows.map((row, rowIndex) => {
+              const rowFailed = isSpecRowFailed(row);
+              const analyzedMissing = isAnalyzedResultMissing(row, showFieldErrors);
+              return (
+              <TableRow key={rowIndex} sx={specStyles.dataRow(rowIndex, rowFailed)}>
                 <TableCell sx={theme.workflow.formElements.tableCell}>
                   {rowIndex === 0 && (
                     <Chip label={block.material} size="small" sx={theme.workflow.formElements.primaryGradientChip} />
                   )}
                 </TableCell>
 
-                <TableCell sx={theme.workflow.formElements.tableCell}>
+                <TableCell sx={theme.workflow.formElements.tableCell} align="top">
                   {rowIndex === 0 && (
-                    <TextField
-                      size="small"
-                      fullWidth
-                      value={block.lotNo}
-                      onChange={(event) => handleLotNoChange(event.target.value)}
-                      placeholder={formStrings.LOT_PLACEHOLDER}
-                      sx={{ ...theme.workflow.formElements.cellField, ...specStyles.lotField }}
-                    />
+                    <Box>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        value={block.lotNo}
+                        onChange={(event) => handleLotNoChange(event.target.value)}
+                        placeholder={formStrings.LOT_PLACEHOLDER}
+                        disabled={lockLotNo}
+                        error={Boolean(lotErrors.lotNo)}
+                        sx={{
+                          ...mandatoryFieldInputSx(
+                            { ...theme.workflow.formElements.cellField, ...specStyles.lotField },
+                            Boolean(lotErrors.lotNo),
+                            theme
+                          ),
+                          ...(lockLotNo
+                            ? {
+                                "& .MuiOutlinedInput-root.Mui-disabled": {
+                                  background: alpha(theme.palette.textSub, 0.06),
+                                  "& fieldset": { borderColor: alpha(theme.palette.border, 0.8) },
+                                },
+                                "& .MuiInputBase-input.Mui-disabled": {
+                                  WebkitTextFillColor: theme.palette.text,
+                                  color: theme.palette.text,
+                                  fontWeight: 600,
+                                },
+                              }
+                            : {}),
+                        }}
+                      />
+                      {lotErrors.lotNo ? (
+                        <FormHelperText error sx={{ mx: 0, mt: 0.5, fontSize: "0.68rem" }}>
+                          {lotErrors.lotNo}
+                        </FormHelperText>
+                      ) : lockLotNo ? (
+                        <FormHelperText sx={{ mx: 0, mt: 0.5, fontSize: "0.68rem", color: theme.palette.textSub }}>
+                          {formStrings.LOT_ID_LOCKED_HINT}
+                        </FormHelperText>
+                      ) : null}
+                    </Box>
                   )}
                 </TableCell>
 
                 <TableCell sx={theme.workflow.formElements.tableCell}>
-                  <Typography sx={specStyles.specText}>{row.specification}</Typography>
+                  <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
+                    <Typography sx={specStyles.specText}>{row.specification}</Typography>
+                    {rowFailed && (
+                      <Chip label={formStrings.SPEC_STATUS_FAILED} size="small" sx={specStyles.failedSpecChip} />
+                    )}
+                  </Stack>
                 </TableCell>
 
                 <TableCell sx={theme.workflow.formElements.tableCell}>
@@ -375,7 +446,14 @@ const MaterialSpecificationBlock = ({
                     placeholder={formStrings.ANALYZED_RESULT_PLACEHOLDER}
                     type="number"
                     inputProps={{ step: "any" }}
-                    sx={{ ...theme.workflow.formElements.cellField, ...specStyles.analyzedField }}
+                    error={analyzedMissing}
+                    helperText={analyzedMissing ? formStrings.FIELD_REQUIRED_ANALYZED_RESULT : undefined}
+                    FormHelperTextProps={{ sx: { mx: 0, fontSize: "0.65rem" } }}
+                    sx={{
+                      ...theme.workflow.formElements.cellField,
+                      ...specStyles.analyzedField,
+                      ...(rowFailed || analyzedMissing ? specStyles.failedAnalyzedField : {}),
+                    }}
                   />
                 </TableCell>
 
@@ -393,7 +471,8 @@ const MaterialSpecificationBlock = ({
                   />
                 </TableCell>
               </TableRow>
-            ))}
+            );
+            })}
           </TableBody>
         </Table>
       </TableContainer>

@@ -4,6 +4,19 @@ import { OPERATION_STATUS } from "../../../hooks/operationStatus";
 export const SOURCING_STATUS = OPERATION_STATUS;
 export type SourcingStatus = (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
 
+/** Soft-delete is allowed only while the lot is still in progress */
+export const canDeleteRawMaterialLot = (status: string | null | undefined) =>
+  status === OPERATION_STATUS.IN_PROGRESS;
+
+export type RawMaterialLotDeletePayload = {
+  lotId: string;
+};
+
+export type RawMaterialLotDeleteResponse = {
+  lotId: string;
+  status: string;
+};
+
 export type LotCertificate = {
   fileName: string;
   fileUrl: string;
@@ -17,6 +30,7 @@ export type SpecRow = {
   refRange: string;
   analysedResult: string;
   remarks: string;
+  status?: string | null;
   isOutOfRange?: boolean;
   referenceRange?: {
     minValue: number | null;
@@ -24,6 +38,80 @@ export type SpecRow = {
     unit: string | null;
   };
 };
+
+type ApiNumericValue =
+  | number
+  | string
+  | null
+  | undefined
+  | { source?: string | number | null; parsedValue?: number | null };
+
+export function parseApiNumericValue(value: ApiNumericValue): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === "object") {
+    if (value.parsedValue != null && !Number.isNaN(Number(value.parsedValue))) {
+      return Number(value.parsedValue);
+    }
+    if (value.source != null && String(value.source).trim() !== "") {
+      const parsed = Number(String(value.source).trim());
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+  }
+  return null;
+}
+
+export function parseApiAnalysedResultDisplay(value: ApiNumericValue): string {
+  const parsed = parseApiNumericValue(value);
+  if (parsed !== null) return String(parsed);
+  if (value && typeof value === "object" && value.source != null) {
+    return String(value.source).trim();
+  }
+  if (typeof value === "string") return value.trim();
+  return "";
+}
+
+export function parseApiReferenceRange(
+  ref:
+    | {
+        minValue?: ApiNumericValue;
+        maxValue?: ApiNumericValue;
+        unit?: string | null;
+      }
+    | null
+    | undefined
+): ReferenceRangeShape {
+  return {
+    minValue: parseApiNumericValue(ref?.minValue ?? null),
+    maxValue: parseApiNumericValue(ref?.maxValue ?? null),
+    unit: ref?.unit ?? null,
+  };
+}
+
+export function formatReferenceRangeLabel(ref: ReferenceRangeShape): string {
+  const unitSuffix = ref?.unit ? ` ${ref.unit}` : "";
+  if (ref?.minValue != null && ref?.maxValue != null) {
+    return `${ref.minValue} - ${ref.maxValue}${unitSuffix}`;
+  }
+  if (ref?.minValue != null) {
+    return `>= ${ref.minValue}${unitSuffix}`;
+  }
+  if (ref?.maxValue != null) {
+    return `<= ${ref.maxValue}${unitSuffix}`;
+  }
+  return "N/A";
+}
+
+export function isSpecRowFailed(row: Pick<SpecRow, "status" | "isOutOfRange">): boolean {
+  if (String(row.status ?? "").trim().toLowerCase() === "failed") return true;
+  return Boolean(row.isOutOfRange);
+}
 
 export type MaterialBlock = {
   material: string;
@@ -34,6 +122,79 @@ export type MaterialBlock = {
   certificates?: LotCertificate[];
   rows: SpecRow[];
 };
+
+export type MaterialLotBlock = {
+  lotNo: string;
+  certificates: LotCertificate[];
+  rows: SpecRow[];
+};
+
+export type MaterialFormGroup = {
+  material: string;
+  supplyOrderNo: string;
+  receiptDate: string;
+  manufacturerName: string;
+  lots: MaterialLotBlock[];
+};
+
+export type ReferenceRangeShape = {
+  minValue: number | null;
+  maxValue: number | null;
+  unit: string | null;
+};
+
+export function computeIsOutOfRange(
+  analysedResult: string,
+  referenceRange?: ReferenceRangeShape
+): boolean {
+  const trimmed = String(analysedResult ?? "").trim();
+  if (!trimmed || !referenceRange) return false;
+  const value = Number(trimmed);
+  if (Number.isNaN(value)) return false;
+  const { minValue, maxValue } = referenceRange;
+  if (minValue != null && value < minValue) return true;
+  if (maxValue != null && value > maxValue) return true;
+  return false;
+}
+
+export function flattenMaterialGroups(groups: MaterialFormGroup[]): MaterialBlock[] {
+  return (groups ?? []).flatMap((group) =>
+    (group.lots ?? []).map((lot) => ({
+      material: group.material,
+      lotNo: lot.lotNo,
+      supplyOrderNo: group.supplyOrderNo,
+      receiptDate: group.receiptDate,
+      manufacturerName: group.manufacturerName,
+      certificates: lot.certificates ?? [],
+      rows: lot.rows ?? [],
+    }))
+  );
+}
+
+export function groupBlocksToMaterialGroups(blocks: MaterialBlock[]): MaterialFormGroup[] {
+  const byMaterial = new Map<string, MaterialBlock[]>();
+  for (const block of blocks ?? []) {
+    const code = (block.material ?? "").trim();
+    if (!code) continue;
+    if (!byMaterial.has(code)) byMaterial.set(code, []);
+    byMaterial.get(code)!.push(block);
+  }
+
+  return Array.from(byMaterial.entries()).map(([material, group]) => {
+    const head = group[0];
+    return {
+      material,
+      supplyOrderNo: head.supplyOrderNo ?? "",
+      receiptDate: head.receiptDate ?? "",
+      manufacturerName: head.manufacturerName ?? "",
+      lots: group.map((block) => ({
+        lotNo: block.lotNo ?? "",
+        certificates: block.certificates ?? [],
+        rows: block.rows ?? [],
+      })),
+    };
+  });
+}
 
 /** List row from POST …/lot-list */
 export type RawMaterialLotListRow = {
@@ -50,6 +211,21 @@ export type RawMaterialLotListRow = {
   createdOn: string;
   rmStatus: string;
   formId?: string | null;
+};
+
+/** Read-only lot details page context (from list row + details API) */
+export type RawMaterialLotDetailsContext = {
+  lotId: string;
+  procurementId: string;
+  materialCode: string;
+  materialName: string;
+  supplyOrderNo: string;
+  receiptDate: string;
+  manufacturerName: string;
+  rmStatus: string;
+  createdBy?: { id: string; fullName: string } | null;
+  createdOn: string;
+  rejectionReason?: string | null;
 };
 
 /** Synthetic + list row context for form shell (UserWorkflowFormHeader) */
@@ -199,44 +375,27 @@ export class RawMaterialProcurementDetailsModel {
   }
 
   static toMaterialBlocks(model: RawMaterialProcurementDetailsModel): MaterialBlock[] {
-    const formatRefRange = (ref: {
-      minValue: number | null;
-      maxValue: number | null;
-      unit: string | null;
-    }) => {
-      const unitSuffix = ref?.unit ? ` ${ref.unit}` : "";
-      if (ref?.minValue != null && ref?.maxValue != null) {
-        return `${ref.minValue} - ${ref.maxValue}${unitSuffix}`;
-      }
-      if (ref?.minValue != null) {
-        return `>= ${ref.minValue}${unitSuffix}`;
-      }
-      if (ref?.maxValue != null) {
-        return `<= ${ref.maxValue}${unitSuffix}`;
-      }
-      return "N/A";
-    };
-
     return model.materials.map((material) => ({
       material: material.materialCode,
       lotNo: material.lotNo ?? "",
-      rows: (material.specifications ?? []).map((spec) => ({
-        specificationCode: spec.specificationCode,
-        specification: spec.specificationName,
-        specificationName: spec.specificationName,
-        refRange: formatRefRange(spec.referenceRange),
-        analysedResult:
-          spec.analysedResult === null || spec.analysedResult === undefined
-            ? ""
-            : String(spec.analysedResult),
-        remarks: spec.remarks ?? "",
-        isOutOfRange: false,
-        referenceRange: {
-          minValue: spec.referenceRange?.minValue ?? null,
-          maxValue: spec.referenceRange?.maxValue ?? null,
-          unit: spec.referenceRange?.unit ?? null,
-        },
-      })),
+      rows: (material.specifications ?? []).map((spec) => {
+        const referenceRange = parseApiReferenceRange(spec.referenceRange);
+        const analysedResult = parseApiAnalysedResultDisplay(spec.analysedResult as ApiNumericValue);
+        const status = spec.status ?? null;
+        return {
+          specificationCode: spec.specificationCode,
+          specification: spec.specificationName,
+          specificationName: spec.specificationName,
+          refRange: formatReferenceRangeLabel(referenceRange),
+          analysedResult,
+          remarks: spec.remarks ?? "",
+          status,
+          isOutOfRange:
+            String(status ?? "").trim().toLowerCase() === "failed" ||
+            computeIsOutOfRange(analysedResult, referenceRange),
+          referenceRange,
+        };
+      }),
     }));
   }
 }
@@ -293,24 +452,6 @@ export class RawMaterialLotDetailsModel {
   }
 
   static toMaterialBlocks(model: RawMaterialLotDetailsModel): MaterialBlock[] {
-    const formatRefRange = (ref: {
-      minValue: number | null;
-      maxValue: number | null;
-      unit: string | null;
-    }) => {
-      const unitSuffix = ref?.unit ? ` ${ref.unit}` : "";
-      if (ref?.minValue != null && ref?.maxValue != null) {
-        return `${ref.minValue} - ${ref.maxValue}${unitSuffix}`;
-      }
-      if (ref?.minValue != null) {
-        return `>= ${ref.minValue}${unitSuffix}`;
-      }
-      if (ref?.maxValue != null) {
-        return `<= ${ref.maxValue}${unitSuffix}`;
-      }
-      return "N/A";
-    };
-
     return [
       {
         material: model.materialCode,
@@ -319,23 +460,24 @@ export class RawMaterialLotDetailsModel {
         receiptDate: model.receiptDate,
         manufacturerName: model.manufacturerName,
         certificates: [...(model.certificates ?? [])],
-        rows: (model.specifications ?? []).map((spec) => ({
-          specificationCode: spec.specificationCode,
-          specification: spec.specificationName,
-          specificationName: spec.specificationName,
-          refRange: formatRefRange(spec.referenceRange),
-          analysedResult:
-            spec.analysedResult === null || spec.analysedResult === undefined
-              ? ""
-              : String(spec.analysedResult),
-          remarks: spec.remarks ?? "",
-          isOutOfRange: false,
-          referenceRange: {
-            minValue: spec.referenceRange?.minValue ?? null,
-            maxValue: spec.referenceRange?.maxValue ?? null,
-            unit: spec.referenceRange?.unit ?? null,
-          },
-        })),
+        rows: (model.specifications ?? []).map((spec) => {
+          const referenceRange = parseApiReferenceRange(spec.referenceRange);
+          const analysedResult = parseApiAnalysedResultDisplay(spec.analysedResult as ApiNumericValue);
+          const status = spec.status ?? null;
+          return {
+            specificationCode: spec.specificationCode,
+            specification: spec.specificationName,
+            specificationName: spec.specificationName,
+            refRange: formatReferenceRangeLabel(referenceRange),
+            analysedResult,
+            remarks: spec.remarks ?? "",
+            status,
+            isOutOfRange:
+              String(status ?? "").trim().toLowerCase() === "failed" ||
+              computeIsOutOfRange(analysedResult, referenceRange),
+            referenceRange,
+          };
+        }),
       },
     ];
   }
@@ -349,7 +491,7 @@ export function mapLotListApiRow(lot: any, index: number): RawMaterialLotListRow
     id,
     lotId,
     procurementId: String(lot?.procurementId ?? ""),
-    materialCode: String(lot?.materialCode ?? ""),
+    materialCode: String(lot?.materialCode ?? lot?.material ?? "").trim(),
     materialName: String(lot?.materialName ?? ""),
     supplyOrderNo: String(lot?.supplyOrderNo ?? ""),
     receiptDate: String(lot?.receiptDate ?? ""),
@@ -421,50 +563,51 @@ export function certificateFileUrlForApi(cert: LotCertificate): string {
   return RAW_MATERIAL_CERTIFICATE_PLACEHOLDER_FILE_URL;
 }
 
-export function mapBlocksToCreateMaterials(blocks: MaterialBlock[]): RawMaterialMaterialCreatePayload[] {
-  const byMaterial = new Map<string, MaterialBlock[]>();
-  for (const b of blocks ?? []) {
-    const code = (b.material ?? "").trim();
-    if (!code) continue;
-    if (!byMaterial.has(code)) byMaterial.set(code, []);
-    byMaterial.get(code)!.push(b);
-  }
-
-  return Array.from(byMaterial.entries()).map(([materialCode, group]) => {
-    const head = group[0];
-    return {
-      materialCode,
-      supplyOrderNo: (head.supplyOrderNo ?? "").trim(),
-      receiptDate: (head.receiptDate ?? "").trim(),
-      manufacturerName: (head.manufacturerName ?? "").trim(),
-      lots: group.map((block) => ({
-        lotId: (block.lotNo ?? "").trim(),
-        specifications: (block.rows ?? [])
-          .filter((row) => (row.specificationCode ?? "").trim())
-          .map((row) => ({
-            specificationCode: (row.specificationCode ?? "").trim(),
-            analysedResult:
-              row.analysedResult === "" || row.analysedResult === null || row.analysedResult === undefined
-                ? null
-                : Number(row.analysedResult),
-            isOutOfRange: Boolean(row.isOutOfRange),
-            remarks: row.remarks ?? "",
-          })),
-        certificates: (block.certificates ?? [])
-          .filter(
-            (c) =>
-              String(c.fileUrl ?? "").trim().length > 0 ||
-              String(c.fileName ?? "").trim().length > 0 ||
-              String(c.certificateType ?? "").trim().length > 0
-          )
-          .map((c) => ({
-            fileName: String(c.fileName ?? "").trim(),
-            certificateType: String(c.certificateType ?? "").trim(),
-            fileUrl: certificateFileUrlForApi(c),
-          })),
+function mapLotBlockToCreatePayload(lot: MaterialLotBlock): RawMaterialLotCreatePayload {
+  return {
+    lotId: (lot.lotNo ?? "").trim(),
+    specifications: (lot.rows ?? [])
+      .filter((row) => (row.specificationCode ?? "").trim())
+      .map((row) => ({
+        specificationCode: (row.specificationCode ?? "").trim(),
+        analysedResult:
+          row.analysedResult === "" || row.analysedResult === null || row.analysedResult === undefined
+            ? null
+            : Number(row.analysedResult),
+        isOutOfRange: Boolean(row.isOutOfRange),
+        remarks: row.remarks ?? "",
       })),
-    };
-  });
+    certificates: (lot.certificates ?? [])
+      .filter(
+        (c) =>
+          String(c.fileUrl ?? "").trim().length > 0 ||
+          String(c.fileName ?? "").trim().length > 0 ||
+          String(c.certificateType ?? "").trim().length > 0
+      )
+      .map((c) => ({
+        fileName: String(c.fileName ?? "").trim(),
+        certificateType: String(c.certificateType ?? "").trim(),
+        fileUrl: certificateFileUrlForApi(c),
+      })),
+  };
+}
+
+export function mapMaterialGroupsToCreateMaterials(
+  groups: MaterialFormGroup[]
+): RawMaterialMaterialCreatePayload[] {
+  return (groups ?? [])
+    .filter((g) => (g.material ?? "").trim())
+    .map((group) => ({
+      materialCode: group.material.trim(),
+      supplyOrderNo: (group.supplyOrderNo ?? "").trim(),
+      receiptDate: (group.receiptDate ?? "").trim(),
+      manufacturerName: (group.manufacturerName ?? "").trim(),
+      lots: (group.lots ?? []).map(mapLotBlockToCreatePayload),
+    }));
+}
+
+export function mapBlocksToCreateMaterials(blocks: MaterialBlock[]): RawMaterialMaterialCreatePayload[] {
+  return mapMaterialGroupsToCreateMaterials(groupBlocksToMaterialGroups(blocks));
 }
 
 export function mapFirstBlockToLotUpdatePayload(

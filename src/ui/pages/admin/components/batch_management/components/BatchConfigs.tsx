@@ -56,11 +56,25 @@ export const getCreatedOn  = (b: any) => b.createdOn     || b.createdAt  || null
 export const getCreatedBy  = (b: any) => b.createdBy     ?? null;
 export const getNotes      = (b: any): string => b.notes || b.description || "";
 
-/** Use identificationSheetStatus when API provides it; else infer from sheet payload */
-export const needsImplementationCompletion = (b: any): boolean => {
-  const sheetStatus =
-    b.identificationSheetStatus ?? b.identification_sheet_status ?? null;
-  if (sheetStatus === "Completed") return false;
-  if (sheetStatus === "Draft") return true;
+/** Normalized API value: DRAFT | COMPLETED | empty */
+export const getIdentificationSheetStatus = (b: any): string =>
+  String(b.identificationSheetStatus ?? b.identification_sheet_status ?? "")
+    .trim()
+    .toUpperCase();
+
+export const isIdentificationSheetDraft = (b: any): boolean => {
+  const status = getIdentificationSheetStatus(b);
+  if (status === "DRAFT") return true;
+  if (status === "COMPLETED") return false;
   return !b.identificationSheet || Object.keys(b.identificationSheet).length === 0;
 };
+
+export const isIdentificationSheetCompleted = (b: any): boolean => {
+  const status = getIdentificationSheetStatus(b);
+  if (status === "COMPLETED") return true;
+  if (status === "DRAFT") return false;
+  return Boolean(b.identificationSheet && Object.keys(b.identificationSheet).length > 0);
+};
+
+/** @deprecated Use isIdentificationSheetDraft */
+export const needsImplementationCompletion = isIdentificationSheetDraft;

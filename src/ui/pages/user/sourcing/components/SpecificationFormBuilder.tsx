@@ -14,9 +14,11 @@ import ConfirmAlertDialog from "../../../../components/common/ConfirmAlertDialog
 import StackRow from "../../../../components/common/StackRow";
 import UserWorkflowActionBar from "../../../../components/custom/UserWorkflowActionBar";
 import MaterialSpecificationBlock from "./MaterialSpecificationBlock";
+import MaterialFormGroupCard from "./MaterialFormGroupCard";
 import useRawMaterialSpecificationForm, {
   SpecificationBlock,
 } from "../../../../../hooks/user/sourcing/useRawMaterialSpecificationForm";
+import type { MandatoryValidationMessages } from "../../../../../data/models/user/rawMaterialProcurementValidation";
 
 const {
   add: AddRoundedIcon,
@@ -31,20 +33,28 @@ type SpecificationFormBuilderProps = {
   isEditMode?: boolean;
   /** When true (Create Lot flow), header copy and lot-oriented labels match the create procurement API */
   createLotMode?: boolean;
+  /** When true (fill/edit existing lot), lot ID cannot be changed */
+  lockLotNo?: boolean;
   onSaveDraft?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
   onSubmit?: (blocks: SpecificationBlock[]) => Promise<boolean | void> | boolean | void;
   onBlocksChange?: (blocks: SpecificationBlock[]) => void;
   actionLoading?: boolean;
+  showDeleteLot?: boolean;
+  onDeleteLot?: () => void;
+  deleteLoading?: boolean;
   pdfMeta?: unknown;
 };
 
 const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
+  const { lockLotNo = false, showDeleteLot = false, onDeleteLot, deleteLoading = false, ...formProps } = props;
   const {
     actionHelperText,
     addingMaterial,
-    availableMaterials,
+    allMaterialsAdded,
     blocks,
     canSubmit,
+    canSaveDraft,
+    showFieldErrors,
     closeDraftConfirm,
     closeSubmitConfirm,
     createLotMode,
@@ -53,25 +63,46 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
     filledRows,
     formStrings,
     handleAdd,
+    handleAddLot,
     handleConfirmDraft,
     handleConfirmSubmit,
     handleRemoveBlock,
+    handleRemoveLot,
+    handleRemoveMaterial,
     handleUpdateBlock,
+    handleUpdateLot,
+    handleUpdateMaterial,
     hasBlocks,
     headerSubtitle,
     headerTitle,
     isEditMode,
     isMaterialLoading,
     loadingMaterials,
+    lotCount,
+    materialCount,
+    materialGroups,
+    mode,
     openDraftConfirm,
     openSubmitConfirm,
+    selectableMaterials,
     selectedMaterial,
     setSelectedMaterial,
     specStyles,
     submitConfirm,
     theme,
     totalRows,
-  } = useRawMaterialSpecificationForm(props);
+  } = useRawMaterialSpecificationForm(formProps);
+
+  const materialsForDropdown = selectableMaterials;
+  /** Bulk material picker only for create-lot flow; fill/edit open a single existing lot. */
+  const showMaterialSelector = createLotMode && !allMaterialsAdded;
+
+  const validationMessages: MandatoryValidationMessages = {
+    supplyOrderNo: formStrings.FIELD_REQUIRED_SUPPLY_ORDER,
+    receiptDate: formStrings.FIELD_REQUIRED_RECEIPT_DATE,
+    manufacturerName: formStrings.FIELD_REQUIRED_MANUFACTURER,
+    lotNo: formStrings.FIELD_REQUIRED_LOT_ID,
+  };
 
   return (
     <Box>
@@ -96,19 +127,30 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
 
       {hasBlocks && (
         <Stack direction="row" gap={1.5} mb={2.5} flexWrap="wrap">
-          <Chip
-            label={`${blocks.length} ${
-              createLotMode
-                ? blocks.length > 1
-                  ? formStrings.LOT_SUFFIX_PLURAL
-                  : formStrings.LOT_SUFFIX
-                : blocks.length > 1
-                  ? formStrings.BLOCK_SUFFIX_PLURAL
-                  : formStrings.BLOCK_SUFFIX
-            }`}
-            size="small"
-            sx={specStyles.summaryPrimaryChip}
-          />
+          {createLotMode ? (
+            <>
+              <Chip
+                label={`${materialCount} ${
+                  materialCount > 1 ? formStrings.MATERIAL_SUFFIX_PLURAL : formStrings.MATERIAL_SUFFIX
+                }`}
+                size="small"
+                sx={specStyles.summaryPrimaryChip}
+              />
+              <Chip
+                label={`${lotCount} ${lotCount > 1 ? formStrings.LOT_SUFFIX_PLURAL : formStrings.LOT_SUFFIX}`}
+                size="small"
+                sx={specStyles.summaryPrimaryChip}
+              />
+            </>
+          ) : (
+            <Chip
+              label={`${blocks.length} ${
+                blocks.length > 1 ? formStrings.BLOCK_SUFFIX_PLURAL : formStrings.BLOCK_SUFFIX
+              }`}
+              size="small"
+              sx={specStyles.summaryPrimaryChip}
+            />
+          )}
           <Chip
             label={`${filledRows} / ${totalRows} ${formStrings.RESULTS_FILLED_SUFFIX}`}
             size="small"
@@ -117,62 +159,90 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
         </Stack>
       )}
 
-      <Box sx={specStyles.materialSelectorBox}>
-        <Stack direction={{ xs: "column", sm: "row" }} gap={2} alignItems="flex-end">
-          <Box flex={1}>
-            <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.SELECT_MATERIAL_LABEL}</Typography>
-            <TextField
-              fullWidth
-              select
-              size="small"
-              value={selectedMaterial}
-              onChange={(event) => setSelectedMaterial(event.target.value)}
-              sx={theme.workflow.formElements.textField}
-              SelectProps={{
-                displayEmpty: true,
-                IconComponent: ExpandMoreRoundedIcon,
-                MenuProps: {
-                  PaperProps: {
-                    sx: { borderRadius: 2, mt: 0.5, boxShadow: `0 8px 24px ${theme.palette.mode === "dark" ? "rgba(0,0,0,0.45)" : "rgba(27,79,114,0.12)"}` },
+      {showMaterialSelector && (
+        <Box sx={specStyles.materialSelectorBox}>
+          <Stack direction={{ xs: "column", sm: "row" }} gap={2} alignItems="flex-end">
+            <Box flex={1}>
+              <Typography sx={theme.workflow.formElements.fieldLabel}>{formStrings.SELECT_MATERIAL_LABEL}</Typography>
+              <TextField
+                fullWidth
+                select
+                size="small"
+                value={selectedMaterial}
+                onChange={(event) => setSelectedMaterial(event.target.value)}
+                sx={theme.workflow.formElements.textField}
+                SelectProps={{
+                  displayEmpty: true,
+                  IconComponent: ExpandMoreRoundedIcon,
+                  MenuProps: {
+                    PaperProps: {
+                      sx: {
+                        borderRadius: 2,
+                        mt: 0.5,
+                        boxShadow: `0 8px 24px ${mode === "dark" ? "rgba(0,0,0,0.45)" : "rgba(27,79,114,0.12)"}`,
+                      },
+                    },
                   },
-                },
-              }}
-              disabled={loadingMaterials}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <ScienceRoundedIcon sx={{ fontSize: 16, color: selectedMaterial ? theme.palette.primaryLight : theme.palette.border }} />
-                  </InputAdornment>
-                ),
-              }}
-            >
-              <MenuItem value="" disabled>
-                <Typography color="text.disabled" fontSize="0.85rem">
-                  {loadingMaterials ? formStrings.LOADING_MATERIALS : formStrings.SELECT_MATERIAL_PLACEHOLDER}
-                </Typography>
-              </MenuItem>
-              {availableMaterials.map((material) => (
-                <MenuItem key={material.materialCode} value={material.materialCode} sx={{ ...specStyles.materialOption, color: theme.palette.text }}>
-                  {material.materialCode} - {material.materialName}
-                  <Typography component="span" sx={specStyles.materialOptionMeta}>
-                    ({material.specCount} {formStrings.SPEC_COUNT_SUFFIX})
+                }}
+                disabled={loadingMaterials || (createLotMode && materialsForDropdown.length === 0)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <ScienceRoundedIcon
+                        sx={{
+                          fontSize: 16,
+                          color: selectedMaterial ? theme.palette.primaryLight : theme.palette.border,
+                        }}
+                      />
+                    </InputAdornment>
+                  ),
+                }}
+              >
+                <MenuItem value="" disabled>
+                  <Typography color="text.disabled" fontSize="0.85rem">
+                    {loadingMaterials ? formStrings.LOADING_MATERIALS : formStrings.SELECT_MATERIAL_PLACEHOLDER}
                   </Typography>
                 </MenuItem>
-              ))}
-            </TextField>
-          </Box>
+                {materialsForDropdown.map((material) => (
+                  <MenuItem
+                    key={material.materialCode}
+                    value={material.materialCode}
+                    sx={{ ...specStyles.materialOption, color: theme.palette.text }}
+                  >
+                    {material.materialCode} - {material.materialName}
+                    <Typography component="span" sx={specStyles.materialOptionMeta}>
+                      ({material.specCount} {formStrings.SPEC_COUNT_SUFFIX})
+                    </Typography>
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
 
-          <Button
-            variant="contained"
-            onClick={handleAdd}
-            disabled={!selectedMaterial || addingMaterial || isMaterialLoading(selectedMaterial)}
-            startIcon={<AddRoundedIcon />}
-            sx={specStyles.addButton}
-          >
-            {addingMaterial || isMaterialLoading(selectedMaterial) ? formStrings.ADDING_TO_FORM : formStrings.ADD_TO_FORM}
-          </Button>
-        </Stack>
-      </Box>
+            <Button
+              variant="contained"
+              onClick={handleAdd}
+              disabled={
+                !selectedMaterial ||
+                addingMaterial ||
+                isMaterialLoading(selectedMaterial) ||
+                (createLotMode && materialsForDropdown.length === 0)
+              }
+              startIcon={<AddRoundedIcon />}
+              sx={specStyles.addButton}
+            >
+              {addingMaterial || isMaterialLoading(selectedMaterial)
+                ? formStrings.ADDING_TO_FORM
+                : formStrings.ADD_TO_FORM}
+            </Button>
+          </Stack>
+        </Box>
+      )}
+
+      {createLotMode && allMaterialsAdded && (
+        <Typography sx={{ fontSize: "0.8rem", color: theme.palette.textSub, mb: 2 }}>
+          {formStrings.ALL_MATERIALS_ADDED}
+        </Typography>
+      )}
 
       <Stack spacing={2.5}>
         {!hasBlocks && (
@@ -183,17 +253,39 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
           </Box>
         )}
 
-        {blocks.map((block, idx) => (
-          <MaterialSpecificationBlock
-            key={`${block.material}-${idx}`}
-            block={block}
-            index={idx}
-            createLotMode={createLotMode}
-            onUpdate={handleUpdateBlock}
-            onRemove={handleRemoveBlock}
-            theme={theme}
-          />
-        ))}
+        {createLotMode
+          ? materialGroups.map((group, materialIndex) => (
+              <MaterialFormGroupCard
+                key={`${group.material}-${materialIndex}`}
+                group={group}
+                materialIndex={materialIndex}
+                onUpdateMaterial={handleUpdateMaterial}
+                onUpdateLot={handleUpdateLot}
+                onAddLot={handleAddLot}
+                onRemoveMaterial={handleRemoveMaterial}
+                onRemoveLot={handleRemoveLot}
+                showFieldErrors={showFieldErrors}
+                validationMessages={validationMessages}
+                theme={theme}
+              />
+            ))
+          : blocks.map((block, idx) => (
+              <MaterialSpecificationBlock
+                key={`${block.material}-${idx}`}
+                block={block}
+                index={idx}
+                createLotMode={createLotMode}
+                lockLotNo={lockLotNo}
+                showDeleteLot={showDeleteLot}
+                onDeleteLot={onDeleteLot}
+                deleteLoading={deleteLoading}
+                onUpdate={handleUpdateBlock}
+                onRemove={handleRemoveBlock}
+                showFieldErrors={showFieldErrors}
+                validationMessages={validationMessages}
+                theme={theme}
+              />
+            ))}
       </Stack>
 
       {hasBlocks && (
@@ -206,8 +298,9 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
       <UserWorkflowActionBar
         isEdit={isEditMode}
         canSubmit={canSubmit}
+        canSaveDraft={canSaveDraft}
         readinessText={formStrings.READY_TITLE}
-        pendingText={hasBlocks ? formStrings.SUBMIT_DISABLED_TOOLTIP : formStrings.NOT_READY_TITLE}
+        pendingText={!canSubmit ? formStrings.MANDATORY_FIELDS_PENDING : formStrings.READY_TITLE}
         helperText={actionHelperText}
         onSaveDraft={openDraftConfirm}
         onSubmitClick={openSubmitConfirm}
@@ -215,8 +308,8 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
         saveLabel={formStrings.SAVE_DRAFT}
         submitLabel={formStrings.SUBMIT_APPROVAL}
         resubmitLabel={formStrings.RESUBMIT_APPROVAL}
-        saveTooltip={hasBlocks ? formStrings.SAVE_CONTINUE : formStrings.SAVE_DISABLED_TOOLTIP}
-        disableActions={disableActionBar}
+        saveTooltip={!canSaveDraft ? formStrings.MANDATORY_FIELDS_PENDING : formStrings.SAVE_CONTINUE}
+        disableActions={disableActionBar || deleteLoading}
       />
 
       <ConfirmAlertDialog
@@ -235,9 +328,7 @@ const SpecificationFormBuilder = (props: SpecificationFormBuilderProps) => {
         severity="warning"
         title={isEditMode ? formStrings.CONFIRM_RESUBMIT_TITLE : formStrings.CONFIRM_SUBMIT_TITLE}
         message={
-          isEditMode
-            ? formStrings.CONFIRM_RESUBMIT_MESSAGE
-            : formStrings.CONFIRM_SUBMIT_MESSAGE
+          isEditMode ? formStrings.CONFIRM_RESUBMIT_MESSAGE : formStrings.CONFIRM_SUBMIT_MESSAGE
         }
         confirmLabel={isEditMode ? formStrings.CONFIRM_RESUBMIT_ACTION : formStrings.CONFIRM_SUBMIT_ACTION}
         cancelLabel={formStrings.CONFIRM_CANCEL_ACTION}

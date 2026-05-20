@@ -18,6 +18,10 @@ export const APPROVER_ENDPOINTS = {
   BATCH_LIST: `${API_BASE}/approver/subdepartment/batch-list`,
   CHANGE_STATUS: `${API_BASE}/approver/form/change-status`,
   FORM_PDF: `${API_BASE}/approver/form/pdf`,
+  RAW_MATERIAL_PROCUREMENT_LIST: `${API_BASE}/approver/raw-material-procurement/list`,
+  RAW_MATERIAL_PROCUREMENT_CHANGE_STATUS: `${API_BASE}/approver/raw-material-procurement/change-status`,
+  ROCKET_MOTOR_CASING_LIST: `${API_BASE}/approver/rocket-motor-casing/list`,
+  ROCKET_MOTOR_CASING_CHANGE_STATUS: `${API_BASE}/approver/rocket-motor-casing/change-status`,
 };
 
 export const ADMIN_ENDPOINTS = {
@@ -196,18 +200,22 @@ export const USER_OPERATIONS_ENDPOINTS = {
   MATERIAL_SPECIFICATION_LIST: `${API_BASE}/user/subdepartment/materials/specification-list`,
   DIMENSIONAL_PARAMETERS_LIST: `${API_BASE}/user/subdepartment/dimensional/parameters-list`,
   SOLID_PROCESSES_LIST: `${API_BASE}/user/subdepartment/solid/processes-list`,
+  MOTORS_STAGE_LIST: `${API_BASE}/user/subdepartment/motors-stage-list`,
+  APPROVED_MOTORS_LIST: `${API_BASE}/user/subdepartment/approved-motors-list`,
 };
 
 export const USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS = {
   CREATE_FORM: `${API_BASE}/user/raw-material-procurement/form/create`,
   FORM_DETAILS: `${API_BASE}/user/raw-material-procurement/form/details`,
   UPDATE_FORM: `${API_BASE}/user/raw-material-procurement/form/update`,
+  DELETE_FORM: `${API_BASE}/user/raw-material-procurement/form/delete`,
 };
 
 export const USER_ROCKET_MOTOR_CASING_ENDPOINTS = {
   CREATE_FORM: `${API_BASE}/user/rocket-motor-casing/form/create`,
   FORM_DETAILS: `${API_BASE}/user/rocket-motor-casing/form/details`,
   UPDATE_FORM: `${API_BASE}/user/rocket-motor-casing/form/update`,
+  DELETE_FORM: `${API_BASE}/user/rocket-motor-casing/form/delete`,
   CASING_LIST: `${API_BASE}/user/subdepartment/rocket-motor-casing/list`,
 };
 

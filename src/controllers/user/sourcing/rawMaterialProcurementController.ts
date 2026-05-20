@@ -3,12 +3,15 @@ import {
   RawMaterialCreateFormPayload,
   RawMaterialLotDetailsModel,
   RawMaterialLotListRequest,
+  RawMaterialLotDeletePayload,
+  RawMaterialLotDeleteResponse,
   RawMaterialLotUpdatePayload,
   RawMaterialProcurementDetailsModel,
   RawMaterialProcurementSubmitResponseModel,
 } from "../../../data/models/user/RawMaterialProcurementModel";
 import {
   createRawMaterialProcurementFormApi,
+  deleteRawMaterialProcurementFormApi,
   fetchRawMaterialLotListApi,
   fetchRawMaterialProcurementFormDetailsApi,
   updateRawMaterialProcurementFormApi,
@@ -79,6 +82,16 @@ export const rawMaterialProcurementController = {
       );
     } catch (error) {
       console.error("Failed to update raw material procurement form:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  deleteLot: async (payload: RawMaterialLotDeletePayload) => {
+    try {
+      const response = await deleteRawMaterialProcurementFormApi(payload);
+      return new ApiResponseModel<RawMaterialLotDeleteResponse>(response);
+    } catch (error) {
+      console.error("Failed to delete raw material lot:", error);
       return new ApiResponseModel(error);
     }
   },

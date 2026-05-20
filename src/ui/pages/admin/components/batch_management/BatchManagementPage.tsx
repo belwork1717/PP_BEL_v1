@@ -21,6 +21,9 @@ import { useBatchActions } from "../../../../../hooks/admin/batch_management/use
 
 const S = STRINGS.BATCH_MANAGEMENT;
 
+/** Raw material sub-department id for admin lot-list API calls */
+const ADMIN_LOT_LIST_SUB_DEPARTMENT_ID = 111;
+
 /* ── Stat icon map keyed by variant (same pattern as UserManagementPage) ── */
 const STAT_ICONS: Record<string, React.ReactNode> = {
   total:      <icons.batchMgmt.batchIcon   sx={{ fontSize: 22 }} />,
@@ -197,6 +200,7 @@ const BatchManagementPage = ({ mode = "light" }: any) => {
         onEdit={actions.openEdit}
         onDelete={actions.openDelete}
         onCompleteImplementation={actions.openCompleteImplementation}
+        onViewImplementation={actions.openViewImplementation}
         onPageChange={(_: any, p: number) => listParams.setPage(p)}
         onRowsPerPageChange={(e: any) => { listParams.setRowsPerPage(+e.target.value); listParams.setPage(0); }}
       />
@@ -204,7 +208,10 @@ const BatchManagementPage = ({ mode = "light" }: any) => {
       {/* ── Modals ────────────────────────────────────────────────────── */}
       <BatchFormModal
         open={actions.modalOpen}
-        onClose={() => actions.setModalOpen(false)}
+        onClose={() => {
+          actions.setModalOpen(false);
+          lookups.clearApprovedMotors();
+        }}
         onSave={actions.handleSaveBatch}
         onOpenImplementation={actions.openImplementationFromCreate}
         editTarget={actions.editTarget}
@@ -212,18 +219,31 @@ const BatchManagementPage = ({ mode = "light" }: any) => {
         onFormChange={actions.handleBatchFormChange}
         onMotorIdsChange={actions.handleMotorIdsChange}
         userOptions={lookups.userOptions}
+        projectOptions={lookups.projectOptions}
+        projectsLoading={lookups.loading}
+        motorStageOptions={lookups.motorStageOptions}
+        motorStagesLoading={lookups.loading}
+        availableMotorOptions={lookups.availableMotorOptions}
+        availableMotorsLoading={lookups.availableMotorsLoading}
+        onFetchApprovedMotors={lookups.fetchApprovedMotors}
+        onClearApprovedMotors={lookups.clearApprovedMotors}
         saving={actions.saving}
         t={t}
       />
 
       <BatchImplementationModal
         open={actions.implModalOpen}
-        onClose={() => actions.setImplModalOpen(false)}
+        onClose={() => {
+          actions.setImplModalOpen(false);
+          actions.setImplViewOnly(false);
+        }}
         onSave={actions.handleSaveImplementation}
         editTarget={actions.editImplTarget}
         form={actions.implForm}
         onFormChange={actions.handleImplFormChange}
         onMaterialsChange={actions.handleMaterialsChange}
+        subDepartmentId={ADMIN_LOT_LIST_SUB_DEPARTMENT_ID}
+        readOnly={actions.implViewOnly}
         saving={actions.implSaving}
         t={t}
       />

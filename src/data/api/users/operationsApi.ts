@@ -20,3 +20,14 @@ export const fetchDimensionalParametersListApi = async (payload: { motorType: st
 export const fetchSolidProcessesListApi = async (payload: { materialType: string }) => {
   return await post(USER_OPERATIONS_ENDPOINTS.SOLID_PROCESSES_LIST, payload);
 };
+
+export const fetchMotorsStageListApi = async (params?: { projectId?: string }) => {
+  return await get(USER_OPERATIONS_ENDPOINTS.MOTORS_STAGE_LIST, params ?? {});
+};
+
+export const fetchApprovedMotorsListApi = async (payload: {
+  projectId: string;
+  motorStage: string;
+}) => {
+  return await post(USER_OPERATIONS_ENDPOINTS.APPROVED_MOTORS_LIST, payload);
+};

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import { alpha } from "@mui/material/styles";
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -26,7 +26,6 @@ const ARTICLE_OPTIONS = [
   "Control grains",
 ];
 
-const PROJECT_OPTIONS = ["PRJ-2026-0001", "PRJ-2026-0002", "PRJ-2026-0003"];
 const MOTOR_COUNT_OPTIONS = [1, 2, 3];
 
 const BatchFormModal = ({
@@ -39,6 +38,14 @@ const BatchFormModal = ({
   onFormChange,
   onMotorIdsChange,
   userOptions,
+  projectOptions = [],
+  projectsLoading = false,
+  motorStageOptions = [],
+  motorStagesLoading = false,
+  availableMotorOptions = [],
+  availableMotorsLoading = false,
+  onFetchApprovedMotors,
+  onClearApprovedMotors,
   saving,
   t,
 }: any) => {
@@ -57,15 +64,129 @@ const BatchFormModal = ({
     form.priority &&
     form.systemManagerId &&
     ((isMain || isQualification) ? !!form.projectId : true) &&
+    ((!isSubscale || isQualification) ? !!form.motorType : true) &&
     (!(isExperimental) || !!form.objective?.trim());
 
   const formValid = basicFormValid;
+
+  const selectedProject = projectOptions.find(
+    (project: { projectId: string }) => project.projectId === form.projectId
+  );
+
+  const renderProjectValue = (projectId: string) => {
+    if (!projectId) {
+      return <em>{projectsLoading ? "Loading projects..." : "Select project"}</em>;
+    }
+    const project =
+      projectOptions.find((item: { projectId: string }) => item.projectId === projectId) ??
+      (selectedProject?.projectId === projectId ? selectedProject : null);
+    if (!project) return projectId;
+    return (
+      <Box sx={modal.projectOptionSelected}>
+        <Typography component="span" sx={modal.projectOptionName} noWrap>
+          {project.projectName}
+        </Typography>
+        <Typography component="span" sx={modal.projectOptionId} noWrap>
+          {project.projectId}
+        </Typography>
+      </Box>
+    );
+  };
+
+  const resetMotorIdSlots = () => {
+    const count = Math.max(1, form.numberOfMotors || 1);
+    onMotorIdsChange(Array.from({ length: count }, () => ""));
+  };
+
+  const handleProjectChange = (projectId: string) => {
+    onFormChange("projectId")({ target: { value: projectId } });
+    onFormChange("motorType")({ target: { value: "" } });
+    onFormChange("motorTypeId")({ target: { value: "" } });
+    resetMotorIdSlots();
+    onClearApprovedMotors?.();
+  };
+
+  const handleMotorStageChange = (motorStage: string) => {
+    const selected = motorStageOptions.find(
+      (stage: { motorStage: string }) => stage.motorStage === motorStage
+    );
+    onFormChange("motorType")({ target: { value: motorStage } });
+    onFormChange("motorTypeId")({
+      target: { value: selected?.motorTypeId ?? "" },
+    });
+    resetMotorIdSlots();
+    onClearApprovedMotors?.();
+  };
+
+  const motorIdsPrerequisitesMet =
+    Boolean(String(form.projectId ?? "").trim()) &&
+    Boolean(String(form.motorType ?? "").trim()) &&
+    (form.numberOfMotors ?? 0) > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    if (!motorIdsPrerequisitesMet) {
+      onClearApprovedMotors?.();
+      return;
+    }
+    void onFetchApprovedMotors?.(form.projectId, form.motorType);
+  }, [
+    open,
+    motorIdsPrerequisitesMet,
+    form.projectId,
+    form.motorType,
+    form.numberOfMotors,
+    onFetchApprovedMotors,
+    onClearApprovedMotors,
+  ]);
 
   const handleMotorIdChange = (index: number, value: string) => {
     const newMotorIds = [...form.motorIds];
     newMotorIds[index] = value;
     onMotorIdsChange(newMotorIds);
   };
+
+  const getMotorOptionsForSlot = (index: number) => {
+    const selectedElsewhere = new Set(
+      form.motorIds
+        .map((id: string, idx: number) => (idx !== index ? String(id ?? "").trim() : ""))
+        .filter(Boolean)
+    );
+
+    let list = availableMotorOptions.filter(
+      (motor: { motorCasingId: string }) => !selectedElsewhere.has(motor.motorCasingId)
+    );
+
+    const current = String(form.motorIds[index] ?? "").trim();
+    if (current && !list.some((m: { motorCasingId: string }) => m.motorCasingId === current)) {
+      list = [
+        { motorCasingId: current, motorStage: "", motorNo: "", projectId: "", status: "" },
+        ...list,
+      ];
+    }
+
+    return list;
+  };
+
+  const renderMotorOptionLabel = (motor: {
+    motorCasingId: string;
+    motorStage?: string;
+    motorNo?: string;
+  }) => {
+    const stagePart = motor.motorStage ? `Stage ${motor.motorStage}` : "";
+    const noPart = motor.motorNo ? `Motor ${motor.motorNo}` : "";
+    const meta = [stagePart, noPart].filter(Boolean).join(" · ");
+    return meta ? `${motor.motorCasingId} — ${meta}` : motor.motorCasingId;
+  };
+
+  const motorsEmptyHint = useMemo(() => {
+    if (!motorIdsPrerequisitesMet) {
+      return "Select project, motor stage, and number of motors first";
+    }
+    if (availableMotorsLoading) return "Loading approved motors...";
+    if (availableMotorOptions.length === 0) return "No approved motors for this project and stage";
+    return "Select motor casing ID";
+  }, [motorIdsPrerequisitesMet, availableMotorsLoading, availableMotorOptions.length]);
 
   const handleNumberOfMotorsChange = (value: number) => {
     const nextValue = Math.min(3, Math.max(1, value));
@@ -160,11 +281,24 @@ const BatchFormModal = ({
               {(isMain || isQualification) ? (
                 <FormControl fullWidth size="small" sx={input}>
                   <InputLabel>Project Name</InputLabel>
-                  <Select value={form.projectId} label="Project Name"
-                    onChange={onFormChange("projectId")} MenuProps={t.menuPaper}>
-                    <MenuItem value=""><em>Select project</em></MenuItem>
-                    {PROJECT_OPTIONS.map((project: string) => (
-                      <MenuItem key={project} value={project}>{project}</MenuItem>
+                  <Select
+                    value={form.projectId}
+                    label="Project Name"
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                    MenuProps={t.menuPaper}
+                    disabled={projectsLoading}
+                    renderValue={renderProjectValue}
+                  >
+                    <MenuItem value="">
+                      <em>{projectsLoading ? "Loading projects..." : "Select project"}</em>
+                    </MenuItem>
+                    {projectOptions.map((project: { projectId: string; projectName: string }) => (
+                      <MenuItem key={project.projectId} value={project.projectId}>
+                        <Box sx={modal.projectOption}>
+                          <Typography sx={modal.projectOptionName}>{project.projectName}</Typography>
+                          <Typography sx={modal.projectOptionId}>{project.projectId}</Typography>
+                        </Box>
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
@@ -191,12 +325,30 @@ const BatchFormModal = ({
               {(!isSubscale || isQualification) && (
                 <FormControl fullWidth size="small" sx={input}>
                   <InputLabel>Motor Type / Stage</InputLabel>
-                  <Select value={form.motorType} label="Motor Type / Stage"
-                    onChange={onFormChange("motorType")} MenuProps={t.menuPaper}>
-                    <MenuItem value=""><em>Select motor type</em></MenuItem>
-                    {S.MOTOR_TYPES.map((mt: string) => (
-                      <MenuItem key={mt} value={mt}>{mt}</MenuItem>
-                    ))}
+                  <Select
+                    value={form.motorType}
+                    label="Motor Type / Stage"
+                    onChange={(event) => handleMotorStageChange(event.target.value)}
+                    MenuProps={t.menuPaper}
+                    disabled={motorStagesLoading}
+                  >
+                    <MenuItem value="">
+                      <em>{motorStagesLoading ? "Loading motor stages..." : "Select motor stage"}</em>
+                    </MenuItem>
+                    {motorStageOptions.map(
+                      (stage: { motorStage: string; noOfmotors: number; motorTypeId: number }) => (
+                        <MenuItem key={stage.motorStage} value={stage.motorStage}>
+                          <Box sx={modal.motorStageOption}>
+                            <Typography sx={modal.motorStageLabel}>
+                              Stage {stage.motorStage}
+                            </Typography>
+                            <Typography sx={modal.motorStageMeta}>
+                              {stage.noOfmotors} motor{stage.noOfmotors === 1 ? "" : "s"}
+                            </Typography>
+                          </Box>
+                        </MenuItem>
+                      )
+                    )}
                   </Select>
                 </FormControl>
               )}
@@ -263,21 +415,51 @@ const BatchFormModal = ({
                   </Button>
                 </Box>
                 <Stack spacing={1}>
-                  {form.motorIds.map((motorId: string, index: number) => (
-                    <Box key={index} sx={{ display: "flex", gap: 1 }}>
-                      <Input
-                        fullWidth label={`Motor ID ${index + 1}`} value={motorId}
-                        onChange={(e) => handleMotorIdChange(index, e.target.value)}
-                        placeholder="e.g., MTR-101"
-                        size="small" sx={input}
-                      />
-                      {form.motorIds.length > 1 && (
-                        <Button size="small" color="error" onClick={() => removeMotorIdField(index)}>
-                          Remove
-                        </Button>
-                      )}
-                    </Box>
-                  ))}
+                  {form.motorIds.map((motorId: string, index: number) => {
+                    const slotOptions = getMotorOptionsForSlot(index);
+                    return (
+                      <Box key={index} sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
+                        <FormControl fullWidth size="small" sx={input}>
+                          <InputLabel>{`Motor ID ${index + 1}`}</InputLabel>
+                          <Select
+                            value={motorId}
+                            label={`Motor ID ${index + 1}`}
+                            onChange={(e) => handleMotorIdChange(index, e.target.value)}
+                            MenuProps={t.menuPaper}
+                            disabled={!motorIdsPrerequisitesMet || availableMotorsLoading}
+                            renderValue={(value) => {
+                              if (!value) {
+                                return <em>{motorsEmptyHint}</em>;
+                              }
+                              const match = availableMotorOptions.find(
+                                (m: { motorCasingId: string }) => m.motorCasingId === value
+                              );
+                              return match ? renderMotorOptionLabel(match) : value;
+                            }}
+                          >
+                            <MenuItem value="">
+                              <em>{motorsEmptyHint}</em>
+                            </MenuItem>
+                            {slotOptions.map((motor: { motorCasingId: string }) => (
+                              <MenuItem key={motor.motorCasingId} value={motor.motorCasingId}>
+                                {renderMotorOptionLabel(motor)}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        {form.motorIds.length > 1 && (
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => removeMotorIdField(index)}
+                            sx={{ mt: 0.5, flexShrink: 0 }}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </Box>
 

@@ -67,6 +67,27 @@ export type RocketMotorBatch = {
   rejectionReason: string | null;
 };
 
+export function createEmptyRocketMotorBatch(): RocketMotorBatch {
+  return {
+    id: "new",
+    formId: null,
+    procurementId: null,
+    motorCasingId: "",
+    motorStage: "",
+    motorNo: "",
+    batchId: "—",
+    batchType: "",
+    motorId: "—",
+    motorType: "",
+    priority: "Medium",
+    assignedTo: null,
+    createdOn: new Date().toISOString(),
+    rmStatus: SOURCING_STATUS.INITIATED,
+    draftData: null,
+    rejectionReason: null,
+  };
+}
+
 export const INITIAL_ROCKET_FORM: RocketFormData = {
   motorCasingId: "",
   motorStageApi: "",

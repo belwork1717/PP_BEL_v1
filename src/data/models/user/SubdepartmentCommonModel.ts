@@ -71,3 +71,92 @@ export class SolidProcessesListModel {
     return new SolidProcessesListModel(apiResponse?.data ?? {});
   }
 }
+
+export class MotorStageListItemModel {
+  motorStage: string;
+  noOfmotors: number;
+  /** Derived from list order when API does not return an explicit id */
+  motorTypeId: number;
+
+  constructor(payload: any, index: number) {
+    this.motorStage = String(payload?.motorStage ?? "").trim();
+    this.noOfmotors = Number(payload?.noOfmotors ?? payload?.noOfMotors ?? 0);
+    this.motorTypeId = index + 1;
+  }
+}
+
+export class MotorsStageListModel {
+  stages: MotorStageListItemModel[];
+
+  constructor(stages: MotorStageListItemModel[] = []) {
+    this.stages = stages;
+  }
+
+  static fromApi(apiResponse: any): MotorsStageListModel {
+    const raw = Array.isArray(apiResponse?.data) ? apiResponse.data : [];
+    return new MotorsStageListModel(
+      raw.map((item: any, index: number) => new MotorStageListItemModel(item, index))
+    );
+  }
+}
+
+export type AvailableMotorOption = {
+  motorCasingId: string;
+  motorStage: string;
+  motorNo: string;
+  projectId: string;
+  status: string;
+};
+
+export class AvailableMotorModel implements AvailableMotorOption {
+  motorCasingId: string;
+  motorStage: string;
+  motorNo: string;
+  projectId: string;
+  status: string;
+
+  constructor(payload: Record<string, unknown>) {
+    this.motorCasingId = String(payload?.motorCasingId ?? "").trim();
+    this.motorStage = String(payload?.motorStage ?? "").trim();
+    this.motorNo = String(payload?.motorNo ?? "").trim();
+    this.projectId = String(payload?.projectId ?? "").trim();
+    this.status = String(payload?.status ?? "").trim();
+  }
+}
+
+export class AvailableMotorsListModel {
+  motors: AvailableMotorModel[];
+
+  constructor(motors: AvailableMotorModel[] = []) {
+    this.motors = motors;
+  }
+
+  static fromApi(apiResponse: { data?: unknown }): AvailableMotorsListModel {
+    const data = apiResponse?.data;
+    let motors: unknown[] = [];
+    let projectId = "";
+    let motorStage = "";
+
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const obj = data as Record<string, unknown>;
+      motors = Array.isArray(obj.motors) ? obj.motors : [];
+      projectId = String(obj.projectId ?? "");
+      motorStage = String(obj.motorStage ?? "");
+    } else if (Array.isArray(data)) {
+      motors = data;
+    }
+
+    return new AvailableMotorsListModel(
+      motors
+        .map((item) => {
+          const row = item as Record<string, unknown>;
+          return new AvailableMotorModel({
+            ...row,
+            projectId: row.projectId ?? projectId,
+            motorStage: row.motorStage ?? motorStage,
+          });
+        })
+        .filter((m) => m.motorCasingId),
+    );
+  }
+}

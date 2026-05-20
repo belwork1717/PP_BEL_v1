@@ -1,50 +1,39 @@
-import { ChangeEvent, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { useAlertStore } from "../../../app/store/alertStore";
 import { useAuthStore } from "../../../app/store/authStore";
 import { useUserBatchRefreshStore } from "../../../app/store/userBatchRefreshStore";
 import { STRINGS } from "../../../app/config/strings";
 import rocketMotorCasingController from "../../../controllers/user/sourcing/rocketMotorCasingController";
 import {
-  buildRocketMotorCasingSectionsPayload,
+  buildCasingFormPayload,
+  canDeleteRocketMotorCasing,
+  dimensionalRowFromParameter,
+  normalizeDimensionalRow,
+  mapCasingFormDataToDetailBlocks,
+  normalizeRocketCasingListStatus,
+  INITIAL_ROCKET_MOTOR_CASING_FORM,
   RocketMotorCasingDetailsModel,
+  type CasingDetailBlock,
+  type RocketMotorCasingDetailsContext,
+  serializeCasingForm,
+  isCasingFormComplete,
+  canSaveCasingDraft,
+  validateCasingFormForSubmit,
+  type RocketMotorCasingFormData,
 } from "../../../data/models/user/RocketMotorCasingProcurementModel";
 import useDimensionalParametersHook from "../useDimensionalParametersHook";
 import {
-  INITIAL_ROCKET_FORM,
-  RocketFormData,
+  createEmptyRocketMotorBatch,
   RocketMotorBatch,
   SOURCING_STATUS,
 } from "./sourcingWorkflowData";
 import { useRocketMotorCasingList } from "./useRocketMotorCasingList";
+import useRocketMotorCasingLookups from "./useRocketMotorCasingLookups";
 import { OPERATION_STATUS } from "../../operationStatus";
 
-type WorkflowView = "list" | "form";
+type WorkflowView = "list" | "form" | "details";
+type FormEntryMode = "create" | "fill" | "edit";
 
-const getStartingFormData = (batch: RocketMotorBatch | null): RocketFormData => {
-  if (!batch?.draftData) {
-    return { ...INITIAL_ROCKET_FORM, dimensionalData: [] };
-  }
-
-  return {
-    ...INITIAL_ROCKET_FORM,
-    ...batch.draftData,
-    dimensionalData: [...(batch.draftData.dimensionalData ?? [])],
-  };
-};
-
-const serializeForm = (formData: RocketFormData) => {
-  const mediaFilePath =
-    formData.mediaFilePath && typeof formData.mediaFilePath !== "string"
-      ? formData.mediaFilePath.name
-      : formData.mediaFilePath;
-
-  return JSON.stringify({
-    ...formData,
-    mediaFilePath: mediaFilePath ?? null,
-  });
-};
-
-/** True when first save must use POST /form/create (no server ids yet). */
 const shouldUseCreateEndpoint = (batch: RocketMotorBatch | null) => {
   if (!batch) return false;
   const noIds = !String(batch.procurementId ?? "").trim() && !String(batch.formId ?? "").trim();
@@ -53,18 +42,27 @@ const shouldUseCreateEndpoint = (batch: RocketMotorBatch | null) => {
 
 export const useRocketMotorCasingHook = () => {
   const [view, setView] = useState<WorkflowView>("list");
+  const [formEntryMode, setFormEntryMode] = useState<FormEntryMode>("create");
   const [activeBatch, setActiveBatch] = useState<RocketMotorBatch | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [formData, setFormData] = useState<RocketFormData>(INITIAL_ROCKET_FORM);
-  const [initialSnapshot, setInitialSnapshot] = useState(serializeForm(INITIAL_ROCKET_FORM));
+  const [casingForm, setCasingForm] = useState<RocketMotorCasingFormData>(INITIAL_ROCKET_MOTOR_CASING_FORM);
+  const [initialSnapshot, setInitialSnapshot] = useState(serializeCasingForm(INITIAL_ROCKET_MOTOR_CASING_FORM));
   const [loadingFormDetails, setLoadingFormDetails] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [backConfirmOpen, setBackConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetMotorCasingId, setDeleteTargetMotorCasingId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [detailsRow, setDetailsRow] = useState<RocketMotorCasingDetailsContext | null>(null);
+  const [detailsBlocks, setDetailsBlocks] = useState<CasingDetailBlock[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [dimensionalParameters, setDimensionalParameters] = useState<any[]>([]);
   const [dimensionalParametersErrorMessage, setDimensionalParametersErrorMessage] = useState("");
+  const [fetchingMotorParams, setFetchingMotorParams] = useState(false);
 
   const listParams = useRocketMotorCasingList();
+  const lookups = useRocketMotorCasingLookups();
 
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [draftConfirm, setDraftConfirm] = useState(false);
@@ -80,16 +78,86 @@ export const useRocketMotorCasingHook = () => {
   );
 
   const isFormDirty = useMemo(
-    () => serializeForm(formData) !== initialSnapshot,
-    [formData, initialSnapshot]
+    () => serializeCasingForm(casingForm) !== initialSnapshot,
+    [casingForm, initialSnapshot]
   );
+
+  const resolvedMotorStage = String(casingForm.motorStageApi ?? "").trim() || activeBatch?.motorType || "";
+
+  const SUCCESS_ALERT_MS = 2200;
+
+  const returnToListWithSuccess = (message: string) => {
+    showAlert(message, "success", {
+      autoCloseMs: SUCCESS_ALERT_MS,
+      onCloseAction: () => {
+        bumpBatchRefresh();
+        void listParams.refreshUserBatches().then(() => resetFormContext());
+      },
+    });
+  };
+
+  const stayOnFormWithDraftSuccess = (message: string) => {
+    showAlert(message, "success", { autoCloseMs: SUCCESS_ALERT_MS });
+    setHasSavedDraft(true);
+    bumpBatchRefresh();
+    void listParams.refreshUserBatches();
+  };
+
+  const reloadCasingFormDetails = async (motorCasingId: string): Promise<boolean> => {
+    const id = String(motorCasingId ?? "").trim();
+    if (!id) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
+      return false;
+    }
+
+    setLoadingFormDetails(true);
+    try {
+      const detailsResponse = await rocketMotorCasingController.fetchFormDetails({ motorCasingId: id });
+      if (!detailsResponse?.success || !detailsResponse.data) {
+        const fallback =
+          detailsResponse?.statusCode === 404
+            ? STRINGS.SOURCING.CASING_FORM.DETAILS_NOT_FOUND
+            : STRINGS.SOURCING.CASING_FORM.DETAILS_FETCH_ERROR;
+        showAlert(resolveCasingErrorMessage(detailsResponse, fallback), "error");
+        return false;
+      }
+
+      const detailsModel = detailsResponse.data as RocketMotorCasingDetailsModel;
+      const resolvedForm = RocketMotorCasingDetailsModel.toCasingFormData(detailsModel);
+      const stage = resolvedForm.motorStageApi || "";
+
+      await loadDimensionalForStage(stage, resolvedForm.dimensionalData);
+
+      setActiveBatch((prev) =>
+        prev
+          ? {
+              ...prev,
+              formId: detailsModel.formId || prev.formId,
+              procurementId: detailsModel.formId || prev.procurementId,
+              motorCasingId: detailsModel.motorCasingId || prev.motorCasingId,
+              motorStage: detailsModel.motorStage || prev.motorStage,
+              motorNo: detailsModel.motorNo || prev.motorNo,
+              motorType: detailsModel.motorStage || prev.motorType,
+              rmStatus: normalizeRocketCasingListStatus(detailsModel.status),
+            }
+          : prev
+      );
+      setCasingForm(resolvedForm);
+      setInitialSnapshot(serializeCasingForm(resolvedForm));
+      setFormEntryMode((mode) => (mode === "create" ? "fill" : mode));
+      return true;
+    } finally {
+      setLoadingFormDetails(false);
+    }
+  };
 
   const resetFormContext = () => {
     setView("list");
+    setFormEntryMode("create");
     setActiveBatch(null);
     setIsEditMode(false);
-    setFormData(INITIAL_ROCKET_FORM);
-    setInitialSnapshot(serializeForm(INITIAL_ROCKET_FORM));
+    setCasingForm(INITIAL_ROCKET_MOTOR_CASING_FORM);
+    setInitialSnapshot(serializeCasingForm(INITIAL_ROCKET_MOTOR_CASING_FORM));
     setLoadingFormDetails(false);
     setActionLoading(false);
     setBackConfirmOpen(false);
@@ -97,32 +165,19 @@ export const useRocketMotorCasingHook = () => {
     setSubmitConfirm(false);
     setDimensionalParameters([]);
     setDimensionalParametersErrorMessage("");
+    setFetchingMotorParams(false);
     setHasSavedDraft(false);
+    setDetailsRow(null);
+    setDetailsBlocks([]);
+    setLoadingDetails(false);
   };
 
-  const alignDimensionalDataWithParameters = (params: any[], currentRows: any[]) => {
-    if (!params.length) return currentRows ?? [];
-
-    const existingByParamId = new Map(
-      (currentRows ?? []).filter((row: any) => row?.paramId).map((row: any) => [row.paramId, row])
-    );
-
-    return params.map((param: any, idx: number) => {
-      const byId = existingByParamId.get(param.paramId);
-      const byIndex = currentRows?.[idx] ?? {};
-      const source = byId ?? byIndex ?? {};
-
-      return {
-        ...source,
-        paramId: param.paramId,
-        paramName: param.paramName,
-        referenceRange: param.referenceRange,
-        tb: source.tb ?? "",
-        rl: source.rl ?? "",
-        tlbr: source.tlbr ?? "",
-        trbl: source.trbl ?? "",
-        remarks: source.remarks ?? "",
-      };
+  const alignDimensionalRows = (params: any[], current: RocketMotorCasingFormData["dimensionalData"]) => {
+    if (!params.length) return [];
+    const byId = new Map(current.filter((r) => r.paramId).map((r) => [r.paramId, r]));
+    return params.map((p, idx) => {
+      const existing = byId.get(p.paramId);
+      return existing ? normalizeDimensionalRow(existing) : dimensionalRowFromParameter(p, idx);
     });
   };
 
@@ -130,15 +185,34 @@ export const useRocketMotorCasingHook = () => {
     const apiErr = response?.error as { details?: string; code?: string } | string | null | undefined;
     const fromDetails =
       apiErr && typeof apiErr === "object" && apiErr.details != null ? String(apiErr.details) : null;
+    const code =
+      (apiErr && typeof apiErr === "object" ? apiErr.code : null) ||
+      response?.errorCode ||
+      null;
 
-    if (response?.statusCode === 409 && response?.errorCode === "FORM_ALREADY_EXISTS") {
+    if (response?.statusCode === 409 && (code === "FORM_ALREADY_EXISTS" || response?.errorCode === "FORM_ALREADY_EXISTS")) {
       return STRINGS.SOURCING.CASING_FORM.FORM_ALREADY_EXISTS;
     }
-    if (response?.statusCode === 409 && response?.errorCode === "INVALID_STATE_UPDATE") {
+    if (response?.statusCode === 409 && code === "INVALID_STATE_UPDATE") {
       return STRINGS.SOURCING.CASING_FORM.INVALID_STATE_UPDATE;
     }
-    if (response?.statusCode === 422 && response?.errorCode === "INVALID_PARAM_ID") {
+    if (response?.statusCode === 409 && code === "INVALID_STATE_FOR_DELETION") {
+      return fromDetails || STRINGS.SOURCING.CASING_FORM.DELETE_NOT_ALLOWED;
+    }
+    if (code === "INVALID_PARAM_ID" || response?.errorCode === "INVALID_PARAM_ID") {
       return STRINGS.SOURCING.CASING_FORM.INVALID_PARAM_ID;
+    }
+    if (code === "INVALID_MOTOR_STAGE") {
+      return fromDetails || STRINGS.SOURCING.CASING_FORM.INVALID_MOTOR_TYPE;
+    }
+    if (code === "MISSING_UNITS") {
+      return fromDetails || response?.message || fallback;
+    }
+    if (code === "MISSING_INSULATION_PROPS") {
+      return fromDetails || response?.message || fallback;
+    }
+    if (code === "MISSING_VISUAL_INSPECTION" || code === "MISSING_DIMENSIONAL_READINGS") {
+      return fromDetails || response?.message || fallback;
     }
     if (response?.statusCode === 404 && response?.errorCode === "FORM_NOT_FOUND") {
       return STRINGS.SOURCING.CASING_FORM.FORM_NOT_FOUND;
@@ -147,21 +221,21 @@ export const useRocketMotorCasingHook = () => {
     return fromDetails || response?.message || fallback;
   };
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleMediaChange = (file: File | null) => {
-    setFormData((prev) => ({ ...prev, mediaFilePath: file }));
-  };
-
-  const handleDimChange = (paramIdx: number, colKey: string, value: string) => {
-    setFormData((prev) => {
-      const updatedDimensionalData = [...(prev.dimensionalData || [])];
-      updatedDimensionalData[paramIdx] = { ...(updatedDimensionalData[paramIdx] || {}), [colKey]: value };
-      return { ...prev, dimensionalData: updatedDimensionalData };
-    });
+  const loadDimensionalForStage = async (stage: string, currentRows: RocketMotorCasingFormData["dimensionalData"]) => {
+    if (!stage) {
+      setDimensionalParameters([]);
+      setDimensionalParametersErrorMessage("");
+      return;
+    }
+    const { parameters, errorMessage } = await fetchDimensionalParameters(stage);
+    setDimensionalParameters(parameters);
+    setDimensionalParametersErrorMessage(errorMessage ?? "");
+    if (parameters.length) {
+      setCasingForm((prev) => ({
+        ...prev,
+        dimensionalData: alignDimensionalRows(parameters, currentRows),
+      }));
+    }
   };
 
   const openForm = async (batch: RocketMotorBatch, editMode: boolean) => {
@@ -171,19 +245,17 @@ export const useRocketMotorCasingHook = () => {
       batch.rmStatus === SOURCING_STATUS.REJECTED ||
       batch.rmStatus === SOURCING_STATUS.WAITING_FOR_APPROVAL;
 
-    let resolvedFormData = getStartingFormData(batch);
+    let resolvedForm = { ...INITIAL_ROCKET_MOTOR_CASING_FORM };
     let resolvedBatch = { ...batch };
 
     if (!shouldFetchDetails) {
-      resolvedFormData = {
-        ...resolvedFormData,
-        motorCasingId: String(batch.motorCasingId ?? resolvedFormData.motorCasingId ?? ""),
-        motorStageApi: String(batch.motorStage ?? resolvedFormData.motorStageApi ?? ""),
-        motorNoApi: String(batch.motorNo ?? resolvedFormData.motorNoApi ?? ""),
+      resolvedForm = {
+        ...resolvedForm,
+        motorCasingId: String(batch.motorCasingId ?? ""),
+        motorStageApi: String(batch.motorStage ?? ""),
+        motorNoApi: String(batch.motorNo ?? ""),
       };
-    }
-
-    if (shouldFetchDetails) {
+    } else {
       const motorCasingId = String(batch.motorCasingId ?? "").trim();
       if (!motorCasingId) {
         showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
@@ -191,9 +263,7 @@ export const useRocketMotorCasingHook = () => {
       }
 
       setLoadingFormDetails(true);
-      const detailsResponse = await rocketMotorCasingController.fetchFormDetails({
-        motorCasingId,
-      });
+      const detailsResponse = await rocketMotorCasingController.fetchFormDetails({ motorCasingId });
       setLoadingFormDetails(false);
 
       if (!detailsResponse?.success || !detailsResponse.data) {
@@ -206,34 +276,148 @@ export const useRocketMotorCasingHook = () => {
       }
 
       const detailsModel = detailsResponse.data as RocketMotorCasingDetailsModel;
-      resolvedFormData = RocketMotorCasingDetailsModel.toFormData(detailsModel);
+      resolvedForm = RocketMotorCasingDetailsModel.toCasingFormData(detailsModel);
       resolvedBatch = {
         ...resolvedBatch,
         motorCasingId: detailsModel.motorCasingId || resolvedBatch.motorCasingId,
         motorStage: detailsModel.motorStage || resolvedBatch.motorStage,
         motorNo: detailsModel.motorNo || resolvedBatch.motorNo,
         motorType: detailsModel.motorStage || resolvedBatch.motorType,
-        draftData: resolvedFormData,
       };
     }
 
-    const { parameters, errorMessage } = await fetchDimensionalParameters(resolvedBatch.motorType || "");
-    setDimensionalParameters(parameters);
-    setDimensionalParametersErrorMessage(errorMessage ?? "");
-
-    if (parameters.length) {
-      resolvedFormData = {
-        ...resolvedFormData,
-        dimensionalData: alignDimensionalDataWithParameters(parameters, resolvedFormData.dimensionalData),
-      };
-    }
+    const stage = resolvedForm.motorStageApi || resolvedBatch.motorType || "";
+    await loadDimensionalForStage(stage, resolvedForm.dimensionalData);
 
     setActiveBatch(resolvedBatch);
     setIsEditMode(editMode);
-    setFormData(resolvedFormData);
-    setInitialSnapshot(serializeForm(resolvedFormData));
+    setFormEntryMode(editMode ? "edit" : "fill");
+    setCasingForm(resolvedForm);
+    setInitialSnapshot(serializeCasingForm(resolvedForm));
     setView("form");
   };
+
+  const batchToDetailsContext = (batch: RocketMotorBatch): RocketMotorCasingDetailsContext => ({
+    formId: String(batch.formId ?? batch.procurementId ?? ""),
+    projectId: "",
+    motorCasingId: String(batch.motorCasingId ?? batch.batchId ?? ""),
+    procurementId: String(batch.procurementId ?? batch.formId ?? ""),
+    motorStage: String(batch.motorStage ?? batch.motorType ?? ""),
+    motorNo: String(batch.motorNo ?? batch.motorId ?? ""),
+    casingType: String(batch.casingType ?? batch.batchType ?? ""),
+    insulationType: String(batch.insulationType ?? ""),
+    receivingDate: String(batch.receivingDate ?? ""),
+    rmStatus: batch.rmStatus,
+    createdBy: batch.assignedTo ? { fullName: batch.assignedTo.fullName } : null,
+    createdOn: batch.createdOn,
+    rejectionReason: batch.rejectionReason,
+  });
+
+  const handleViewCasingDetails = async (batch: RocketMotorBatch) => {
+    const motorCasingId = String(batch.motorCasingId ?? batch.batchId ?? "").trim();
+    if (!motorCasingId) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
+      return;
+    }
+
+    setDetailsRow(batchToDetailsContext(batch));
+    setDetailsBlocks([]);
+    setView("details");
+    setLoadingDetails(true);
+
+    try {
+      const detailsResponse = await rocketMotorCasingController.fetchFormDetails({ motorCasingId });
+
+      if (!detailsResponse?.success || !detailsResponse.data) {
+        const fallback =
+          detailsResponse?.statusCode === 404
+            ? STRINGS.SOURCING.CASING_FORM.DETAILS_NOT_FOUND
+            : STRINGS.SOURCING.CASING_FORM.DETAILS_FETCH_ERROR;
+        showAlert(resolveCasingErrorMessage(detailsResponse, fallback), "error");
+        resetFormContext();
+        return;
+      }
+
+      const detailsModel = detailsResponse.data as RocketMotorCasingDetailsModel;
+      const formData = RocketMotorCasingDetailsModel.toCasingFormData(detailsModel);
+      const blocks = mapCasingFormDataToDetailBlocks(formData);
+
+      setDetailsBlocks(blocks);
+      setDetailsRow({
+        formId: detailsModel.formId || String(batch.formId ?? ""),
+        projectId: detailsModel.projectId || "",
+        motorCasingId: detailsModel.motorCasingId || motorCasingId,
+        procurementId: String(batch.procurementId ?? detailsModel.formId ?? ""),
+        motorStage: detailsModel.motorStage || batch.motorStage || "",
+        motorNo: detailsModel.motorNo || batch.motorNo || "",
+        casingType: formData.casingType || String(batch.casingType ?? batch.batchType ?? ""),
+        insulationType: formData.insulationType || String(batch.insulationType ?? ""),
+        receivingDate: formData.receivingDate || String(batch.receivingDate ?? ""),
+        rmStatus: normalizeRocketCasingListStatus(detailsModel.status),
+        createdBy: batch.assignedTo ? { fullName: batch.assignedTo.fullName } : null,
+        createdOn: batch.createdOn,
+        rejectionReason: batch.rejectionReason,
+      });
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const handleBackFromDetails = () => {
+    setDetailsRow(null);
+    setDetailsBlocks([]);
+    setLoadingDetails(false);
+    setView("list");
+  };
+
+  const handleCreateMotorCasing = () => {
+    const empty = { ...INITIAL_ROCKET_MOTOR_CASING_FORM, dimensionalData: [] };
+    setFormEntryMode("create");
+    setActiveBatch(createEmptyRocketMotorBatch());
+    setCasingForm(empty);
+    setInitialSnapshot(serializeCasingForm(empty));
+    setIsEditMode(false);
+    setLoadingFormDetails(false);
+    setDimensionalParameters([]);
+    setDimensionalParametersErrorMessage("");
+    setFetchingMotorParams(false);
+    setView("form");
+  };
+
+  useEffect(() => {
+    if (view !== "form") return;
+    const stage = String(casingForm.motorStageApi ?? "").trim();
+    if (!stage) {
+      setFetchingMotorParams(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFetchingMotorParams(true);
+
+    (async () => {
+      try {
+        const { parameters, errorMessage } = await fetchDimensionalParameters(stage);
+        if (cancelled) return;
+        setDimensionalParameters(parameters);
+        setDimensionalParametersErrorMessage(errorMessage ?? "");
+        if (parameters.length) {
+          startTransition(() => {
+            setCasingForm((prev) => ({
+              ...prev,
+              dimensionalData: alignDimensionalRows(parameters, prev.dimensionalData),
+            }));
+          });
+        }
+      } finally {
+        if (!cancelled) setFetchingMotorParams(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [casingForm.motorStageApi, view, fetchDimensionalParameters]);
 
   const handleFillForm = async (batch: RocketMotorBatch) => openForm(batch, false);
   const handleEditForm = async (batch: RocketMotorBatch) => openForm(batch, true);
@@ -261,42 +445,21 @@ export const useRocketMotorCasingHook = () => {
       return false;
     }
 
-    const motorCasingId = String(formData.motorCasingId || activeBatch.motorCasingId || "").trim();
-    const motorStage = String(formData.motorStageApi || activeBatch.motorStage || activeBatch.motorType || "").trim();
-    const motorNo = String(formData.motorNoApi || activeBatch.motorNo || "").trim();
-
-    if (!motorCasingId) {
-      showAlert(STRINGS.SOURCING.CASING_FORM.BATCH_ID_MISSING, "error");
-      return false;
-    }
-    if (!motorStage || !motorNo) {
-      showAlert(STRINGS.SOURCING.CASING_FORM.NOT_READY_TO_SUBMIT, "warning");
+    const submissionType = intent === "draft" ? "DRAFT" : "SUBMIT";
+    const validationError = validateCasingFormForSubmit(casingForm, submissionType);
+    if (validationError) {
+      showAlert(validationError, "warning");
       return false;
     }
 
+    const payload = buildCasingFormPayload(casingForm, subDepartmentId, submissionType);
     const isCreateFlow = shouldUseCreateEndpoint(activeBatch);
-    const sections = buildRocketMotorCasingSectionsPayload(formData, dimensionalParameters, {
-      includeVisualInspection: !isCreateFlow,
-    });
-
-    const basePayload = {
-      subDepartmentId,
-      motorStage,
-      motorNo,
-      motorCasingId,
-      formSubmissionType: (intent === "draft" ? "DRAFT" : "SUBMIT") as "DRAFT" | "SUBMIT",
-      sections,
-    };
 
     setActionLoading(true);
     try {
-      let response;
-
-      if (isCreateFlow) {
-        response = await rocketMotorCasingController.createForm(basePayload);
-      } else {
-        response = await rocketMotorCasingController.updateForm(basePayload);
-      }
+      const response = isCreateFlow
+        ? await rocketMotorCasingController.createForm(payload)
+        : await rocketMotorCasingController.updateForm(payload);
 
       if (!response?.success) {
         const fallback = isCreateFlow
@@ -307,47 +470,37 @@ export const useRocketMotorCasingHook = () => {
       }
 
       const data = response.data;
-      const nextFormId = data?.formId ?? activeBatch.formId ?? null;
-      const nextProcurementId = data?.procurementId ?? activeBatch.procurementId ?? null;
-      const nextStatus = data?.status ?? activeBatch.rmStatus;
-
-      setActiveBatch((prev) =>
-        prev
-          ? {
-              ...prev,
-              formId: nextFormId,
-              procurementId: nextProcurementId,
-              motorCasingId: data?.motorCasingId || prev.motorCasingId,
-              nextStep: data?.nextStep ?? prev.nextStep,
-              rmStatus: nextStatus ? (nextStatus as typeof prev.rmStatus) : prev.rmStatus,
-              draftData: formData,
-            }
-          : prev
-      );
-      setInitialSnapshot(serializeForm(formData));
-
-      if (intent === "draft") {
-        showAlert(
-          isCreateFlow
+      const successMessage =
+        response.message ||
+        (intent === "draft"
+          ? isCreateFlow
             ? STRINGS.SOURCING.CASING_FORM.CREATE_DRAFT_SUCCESS
-            : STRINGS.SOURCING.CASING_FORM.UPDATE_DRAFT_SUCCESS,
-          "success",
-          { autoCloseMs: 2200 }
-        );
-        setHasSavedDraft(true);
-      } else {
-        showAlert(
-          isCreateFlow
+            : STRINGS.SOURCING.CASING_FORM.UPDATE_DRAFT_SUCCESS
+          : isCreateFlow
             ? STRINGS.SOURCING.CASING_FORM.CREATE_SUBMIT_SUCCESS
-            : STRINGS.SOURCING.CASING_FORM.UPDATE_SUBMIT_SUCCESS,
-          "success",
-          { autoCloseMs: 2200 }
-        );
+            : STRINGS.SOURCING.CASING_FORM.UPDATE_SUBMIT_SUCCESS);
 
-        await listParams.refreshUserBatches();
-        resetFormContext();
+      if (!isCreateFlow && intent === "draft") {
+        const motorCasingId = String(
+          data?.motorCasingId || casingForm.motorCasingId || activeBatch.motorCasingId || ""
+        ).trim();
+        setActiveBatch((prev) =>
+          prev
+            ? {
+                ...prev,
+                formId: data?.formId ?? prev.formId,
+                procurementId: data?.procurementId ?? data?.formId ?? prev.procurementId,
+                motorCasingId: motorCasingId || prev.motorCasingId,
+                rmStatus: data?.status ? (data.status as typeof prev.rmStatus) : prev.rmStatus,
+              }
+            : prev
+        );
+        const reloaded = await reloadCasingFormDetails(motorCasingId);
+        if (reloaded) stayOnFormWithDraftSuccess(successMessage);
+        return reloaded;
       }
 
+      returnToListWithSuccess(successMessage);
       return true;
     } finally {
       setActionLoading(false);
@@ -355,40 +508,135 @@ export const useRocketMotorCasingHook = () => {
   };
 
   const handleConfirmDraft = async () => {
-    if (!activeBatch) return;
-
     setDraftConfirm(false);
     await submitCasingForm("draft");
   };
 
   const handleConfirmSubmit = async () => {
-    if (!activeBatch) return;
-
     setSubmitConfirm(false);
     await submitCasingForm("submit");
   };
 
+  const closeDeleteCasingConfirm = useCallback(() => {
+    if (deleteLoading) return;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetMotorCasingId(null);
+  }, [deleteLoading]);
+
+  const openDeleteCasingConfirm = useCallback((motorCasingId: string) => {
+    setDeleteTargetMotorCasingId(motorCasingId);
+    setDeleteConfirmOpen(true);
+  }, []);
+
+  const handleDeleteCasingFromList = useCallback(
+    (batch: RocketMotorBatch) => {
+      if (!canDeleteRocketMotorCasing(batch.rmStatus)) {
+        showAlert(STRINGS.SOURCING.CASING_FORM.DELETE_NOT_ALLOWED, "warning");
+        return;
+      }
+      const motorCasingId = String(batch.motorCasingId ?? "").trim();
+      if (!motorCasingId) {
+        showAlert(STRINGS.SOURCING.CASING_FORM.FORM_ID_MISSING, "error");
+        return;
+      }
+      openDeleteCasingConfirm(motorCasingId);
+    },
+    [openDeleteCasingConfirm, showAlert]
+  );
+
+  const handleDeleteCasingFromForm = useCallback(() => {
+    const motorCasingId = String(activeBatch?.motorCasingId ?? casingForm.motorCasingId ?? "").trim();
+    if (!motorCasingId || !canDeleteRocketMotorCasing(activeBatch?.rmStatus)) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.DELETE_NOT_ALLOWED, "warning");
+      return;
+    }
+    openDeleteCasingConfirm(motorCasingId);
+  }, [activeBatch, casingForm.motorCasingId, openDeleteCasingConfirm, showAlert]);
+
+  const handleConfirmDeleteCasing = useCallback(async () => {
+    const motorCasingId = deleteTargetMotorCasingId?.trim();
+    if (!motorCasingId || deleteLoading) return;
+
+    setDeleteLoading(true);
+    try {
+      const response = await rocketMotorCasingController.deleteForm({ motorCasingId });
+
+      if (!response?.success) {
+        showAlert(resolveCasingErrorMessage(response, STRINGS.SOURCING.CASING_FORM.DELETE_FAILED), "error");
+        return;
+      }
+
+      setDeleteConfirmOpen(false);
+      setDeleteTargetMotorCasingId(null);
+
+      const wasOnForm = view === "form";
+      if (wasOnForm) resetFormContext();
+
+      const SUCCESS_ALERT_MS = 2200;
+      showAlert(
+        response.message || STRINGS.SOURCING.CASING_FORM.DELETE_SUCCESS,
+        "success",
+        {
+          autoCloseMs: SUCCESS_ALERT_MS,
+          onCloseAction: () => {
+            void listParams.refreshUserBatches();
+          },
+        }
+      );
+
+      if (!wasOnForm) {
+        void listParams.refreshUserBatches();
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [deleteTargetMotorCasingId, deleteLoading, listParams, resolveCasingErrorMessage, showAlert, view]);
+
+  const canSubmit = useMemo(() => isCasingFormComplete(casingForm), [casingForm]);
+  const canSaveDraft = useMemo(() => canSaveCasingDraft(casingForm), [casingForm]);
+
+  const canDeleteActiveCasing =
+    formEntryMode !== "create" && canDeleteRocketMotorCasing(activeBatch?.rmStatus);
+
   return {
     view,
+    detailsRow,
+    detailsBlocks,
+    loadingDetails,
+    handleViewCasingDetails,
+    handleBackFromDetails,
+    formEntryMode,
     activeBatch,
     isEditMode,
-    formData,
+    casingForm,
+    setCasingForm,
+    formData: casingForm,
     isFormDirty,
     loadingFormDetails,
     actionLoading,
     dimensionalParameters,
     dimensionalParametersErrorMessage,
     isDimensionalParamsLoading,
+    fetchingMotorParams,
+    resolvedMotorStage,
+    lookups,
     backConfirmOpen,
+    deleteConfirmOpen,
+    deleteLoading,
+    canDeleteActiveCasing,
+    closeDeleteCasingConfirm,
+    handleConfirmDeleteCasing,
+    handleDeleteCasingFromList,
+    handleDeleteCasingFromForm,
+    canSubmit,
+    canSaveDraft,
     ...listParams,
     submitConfirm,
     draftConfirm,
     setSubmitConfirm,
     setDraftConfirm,
     setBackConfirmOpen,
-    handleChange,
-    handleMediaChange,
-    handleDimChange,
+    handleCreateMotorCasing,
     handleFillForm,
     handleEditForm,
     handleBack,

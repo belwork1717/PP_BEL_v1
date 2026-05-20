@@ -565,6 +565,11 @@ export const icons = {
         play: PlayCircleOutlineRoundedIcon,
         person: PersonRoundedIcon,
         calendar: CalendarMonthRoundedIcon,
+        visibility: VisibilityRoundedIcon,
+        inventory: InventoryRoundedIcon,
+        description: DescriptionRoundedIcon,
+        insertDriveFile: InsertDriveFileOutlinedIcon,
+        openInNew: OpenInNewRoundedIcon,
       },
       rocketMotorBatchList: {
         pending: HourglassEmptyRoundedIcon,
@@ -574,6 +579,9 @@ export const icons = {
         play: PlayCircleOutlineRoundedIcon,
         person: PersonRoundedIcon,
         calendar: CalendarMonthRoundedIcon,
+        visibility: VisibilityRoundedIcon,
+        rocketLaunch: RocketLaunchRoundedIcon,
+        description: DescriptionRoundedIcon,
       },
       casingDetailsForm: {
         badge: BadgeRoundedIcon,

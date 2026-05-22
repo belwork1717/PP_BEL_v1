@@ -78,7 +78,8 @@ const RawMaterialProcurement = () => {
 
           {!loadingFormDetails && (
             <SpecificationFormBuilder
-              initialBlocks={formBlocks}
+              key={`rm-spec-${formEntryMode}-${activeBatch.lotId || activeBatch.procurementId || "new"}`}
+              initialBlocks={formEntryMode === "create" ? [] : formBlocks}
               isEditMode={isEditMode}
               createLotMode={formEntryMode === "create"}
               lockLotNo={formEntryMode !== "create"}

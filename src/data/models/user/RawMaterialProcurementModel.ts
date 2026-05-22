@@ -21,6 +21,8 @@ export type LotCertificate = {
   fileName: string;
   fileUrl: string;
   certificateType: string;
+  /** Local file pending upload (casing-aligned; not sent in JSON payload). */
+  file?: File | null;
 };
 
 export type SpecRow = {
@@ -155,6 +157,14 @@ export function computeIsOutOfRange(
   if (minValue != null && value < minValue) return true;
   if (maxValue != null && value > maxValue) return true;
   return false;
+}
+
+/** Stable JSON for dirty-check / snapshots (File → name only). */
+export function serializeMaterialBlocks(blocks: MaterialBlock[]): string {
+  return JSON.stringify(blocks ?? [], (_key, value) => {
+    if (value instanceof File) return value.name;
+    return value;
+  });
 }
 
 export function flattenMaterialGroups(groups: MaterialFormGroup[]): MaterialBlock[] {
@@ -551,15 +561,26 @@ export function createEmptyFormBatch(): RawMaterialFormBatch {
 }
 
 /**
- * Temporary placeholder until real file-upload API returns URLs.
- * Preserves real `fileName` and `certificateType` in the payload; only `fileUrl` is substituted for uploads.
+ * Legacy placeholder when neither https URL nor pending-upload marker applies.
+ * Backend contract: accept `pending-upload://` refs (same as rocket motor casing reportUpload)
+ * or provide a dedicated multipart upload endpoint — see fileToCertificateApiRef.
  */
 export const RAW_MATERIAL_CERTIFICATE_PLACEHOLDER_FILE_URL =
   "https://example.invalid/raw-material-procurement/certificate-upload-pending";
 
+/** Casing-aligned pending marker for new local files in create/update payloads. */
+export function pendingCertificateUploadUrl(fileName: string): string {
+  return `pending-upload://${encodeURIComponent(String(fileName ?? "file").trim() || "file")}`;
+}
+
 export function certificateFileUrlForApi(cert: LotCertificate): string {
   const url = String(cert.fileUrl ?? "").trim();
   if (/^https?:\/\//i.test(url)) return url;
+  if (/^pending-upload:\/\//i.test(url)) return url;
+  if (cert.file) return pendingCertificateUploadUrl(cert.file.name || cert.fileName);
+  if (/^blob:/i.test(url) && cert.fileName) {
+    return pendingCertificateUploadUrl(cert.fileName);
+  }
   return RAW_MATERIAL_CERTIFICATE_PLACEHOLDER_FILE_URL;
 }
 

@@ -23,6 +23,7 @@ import { STRINGS } from "../../../../../app/config/strings";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
 import UserWorkflowStatusCell from "../../../../components/custom/UserWorkflowStatusCell";
 import type { MaterialBlock, RawMaterialLotDetailsContext } from "../../../../../data/models/user/RawMaterialProcurementModel";
+import { fileUtils } from "../../../../../utils/FileUtils";
 
 const BL = STRINGS.SOURCING.BATCH_LIST;
 const FH = STRINGS.MANUFACTURING.FORM_HEADER;
@@ -240,7 +241,7 @@ const RawMaterialLotDetailsView = ({ row, blocks, loading, onBack }: RawMaterial
                             </Typography>
                           ) : null}
                         </Box>
-                        {cert.fileUrl ? (
+                        {fileUtils.isOpenableCertificateUrl(cert.fileUrl) ? (
                           <Link
                             href={cert.fileUrl}
                             target="_blank"

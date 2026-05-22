@@ -409,7 +409,7 @@ const MotorCasingCreateForm = ({
             onClearExisting={() => patch({ insulationReportExisting: null, insulationReportUrl: null })}
             label={S.REPORT_UPLOAD}
             description="PDF or image"
-            accept="application/pdf,image/*"
+            accept="application/pdf,.pdf,image/*"
             uploadedFileLabel={S.UPLOADED_FILE_LABEL}
             changeFileLabel={S.CHANGE_FILE}
             removeFileLabel={S.REMOVE_FILE}

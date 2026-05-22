@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { startTransition, useCallback, useMemo, useState } from "react";
 import { STRINGS } from "../../../app/config/strings";
 import { useAlertStore } from "../../../app/store/alertStore";
 import { useAuthStore } from "../../../app/store/authStore";
@@ -11,6 +11,7 @@ import {
   canDeleteRawMaterialLot,
   mapFirstBlockToLotUpdatePayload,
   MaterialBlock,
+  serializeMaterialBlocks,
   RawMaterialFormBatch,
   RawMaterialLotDetailsModel,
   RawMaterialLotDetailsContext,
@@ -19,6 +20,7 @@ import {
   SOURCING_STATUS,
 } from "../../../data/models/user/RawMaterialProcurementModel";
 import { useRawMaterialLotList } from "./useRawMaterialLotList";
+import { rmCertDebug, summarizeBlocks } from "../../../utils/rawMaterialCertUploadDebug";
 
 type WorkflowView = "list" | "form" | "details";
 type FormEntryMode = "create" | "fill" | "edit";
@@ -53,7 +55,7 @@ export const useRawMaterialProcurementHook = () => {
   );
 
   const isFormDirty = useMemo(
-    () => JSON.stringify(formBlocks) !== initialSnapshot,
+    () => serializeMaterialBlocks(formBlocks) !== initialSnapshot,
     [formBlocks, initialSnapshot]
   );
 
@@ -122,7 +124,7 @@ export const useRawMaterialProcurementHook = () => {
       const wf = detailsResponse.data.workflowInsights;
 
       setFormBlocks(blocks);
-      setInitialSnapshot(JSON.stringify(blocks));
+      setInitialSnapshot(serializeMaterialBlocks(blocks));
       setActiveBatch((prev) =>
         prev
           ? {
@@ -195,7 +197,7 @@ export const useRawMaterialProcurementHook = () => {
     }
 
     setFormBlocks(blocks);
-    setInitialSnapshot(JSON.stringify(blocks));
+    setInitialSnapshot(serializeMaterialBlocks(blocks));
     setFormEntryMode(mode);
     setIsEditMode(mode === "edit");
     setView("form");
@@ -277,9 +279,18 @@ export const useRawMaterialProcurementHook = () => {
   };
 
   const handleBlocksChange = useCallback((blocks: MaterialBlock[]) => {
-    const nextBlocks = blocks ?? [];
-    setFormBlocks((prev) => (prev === nextBlocks ? prev : nextBlocks));
-  }, []);
+    rmCertDebug("6.parent.handleBlocksChange", {
+      formEntryMode,
+      blockCount: (blocks ?? []).length,
+      blocks: summarizeBlocks(blocks ?? []),
+    });
+    startTransition(() => {
+      setFormBlocks(blocks ?? []);
+      rmCertDebug("6.parent.setFormBlocks.done", {
+        blockCount: (blocks ?? []).length,
+      });
+    });
+  }, [formEntryMode]);
 
   const handleBack = () => {
     if (view === "form" && isFormDirty) {
@@ -310,6 +321,13 @@ export const useRawMaterialProcurementHook = () => {
       if ((block?.lotNo ?? "").trim().length > 0) return true;
       if ((block?.supplyOrderNo ?? "").trim().length > 0) return true;
       if ((block?.manufacturerName ?? "").trim().length > 0) return true;
+      if (
+        (block?.certificates ?? []).some(
+          (c) => String(c.fileName ?? "").trim().length > 0 || Boolean(c.file)
+        )
+      ) {
+        return true;
+      }
       return (block?.rows ?? []).some((row) => {
         const analysedResult = String(row?.analysedResult ?? "").trim();
         const remarks = String(row?.remarks ?? "").trim();
@@ -318,6 +336,10 @@ export const useRawMaterialProcurementHook = () => {
     });
 
     if (formEntryMode === "create") {
+      rmCertDebug("8.submitForm.create.start", {
+        intent,
+        incomingBlocks: summarizeBlocks(blocks ?? []),
+      });
       const mapped = mapBlocksToCreateMaterials(blocks);
       const materials = mapped
         .map((mat) => ({
@@ -325,18 +347,45 @@ export const useRawMaterialProcurementHook = () => {
           lots: mat.lots
             .map((lot, lotIdx) => {
               const trimmed = lot.lotId.trim();
+              const hasSpecs = lot.specifications.length > 0;
+              const hasCerts = (lot.certificates ?? []).length > 0;
               const lotId =
                 trimmed ||
-                (intent === "draft" && lot.specifications.length > 0
+                (intent === "draft" && (hasSpecs || hasCerts)
                   ? `DRAFT-${mat.materialCode}-${lotIdx + 1}`
                   : "");
               return { ...lot, lotId };
             })
-            .filter((lot) => lot.lotId && lot.specifications.length > 0),
+            .filter((lot) => {
+              if (!lot.lotId) return false;
+              const hasSpecs = lot.specifications.length > 0;
+              const hasCerts = (lot.certificates ?? []).length > 0;
+              return hasSpecs || (intent === "draft" && hasCerts);
+            }),
         }))
         .filter((mat) => mat.materialCode && mat.lots.length > 0);
 
+      rmCertDebug("8.submitForm.create.mapped", {
+        intent,
+        hasAnyDraftData,
+        materialCount: materials.length,
+        materials: materials.map((m) => ({
+          materialCode: m.materialCode,
+          lots: m.lots.map((l) => ({
+            lotId: l.lotId,
+            certCount: (l.certificates ?? []).length,
+            certificates: (l.certificates ?? []).map((c) => ({
+              fileName: c.fileName,
+              fileUrl: String(c.fileUrl ?? "").slice(0, 56),
+            })),
+          })),
+        })),
+      });
+
       if ((intent === "draft" && !hasAnyDraftData) || !materials.length) {
+        rmCertDebug("8.submitForm.create.aborted", {
+          reason: !hasAnyDraftData ? "no draft data" : "no materials",
+        });
         showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.EMPTY_FORM_ERROR, "warning");
         return false;
       }
@@ -354,7 +403,7 @@ export const useRawMaterialProcurementHook = () => {
           return false;
         }
 
-        setInitialSnapshot(JSON.stringify(blocks));
+        setInitialSnapshot(serializeMaterialBlocks(blocks));
         setFormBlocks(blocks);
         setActiveBatch((prev) =>
           prev

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, type ChangeEvent } from "react";
+import { useCallback, useMemo, type ChangeEvent } from "react";
 import {
   alpha,
   Box,
@@ -6,8 +6,6 @@ import {
   Chip,
   FormHelperText,
   IconButton,
-  List,
-  ListItem,
   Stack,
   Table,
   TableBody,
@@ -23,6 +21,7 @@ import { icons } from "../../../../../app/theme/icons";
 import { STRINGS } from "../../../../../app/config/strings";
 import { useAlertStore } from "../../../../../app/store/alertStore";
 import { fileUtils } from "../../../../../utils/FileUtils";
+import CertificateUploadSection from "./CertificateUploadSection";
 import StackRow from "../../../../components/common/StackRow";
 import type { LotCertificate } from "../../../../../data/models/user/RawMaterialProcurementModel";
 import {
@@ -46,41 +45,7 @@ const {
   delete: DeleteOutlineRoundedIcon,
   science: ScienceRoundedIcon,
   checkCircleOutline: CheckCircleOutlineRoundedIcon,
-  uploadFile: UploadFileRoundedIcon,
-  insertDriveFile: InsertDriveFileOutlinedIcon,
-  openInNew: OpenInNewRoundedIcon,
 } = icons.user.sourcing.specificationFormBuilder;
-
-const CERTIFICATE_MIME_TYPES = [
-  ...fileUtils.ALLOWED_TYPES.DOCUMENTS,
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.ms-excel",
-  "application/zip",
-  "application/x-zip-compressed",
-];
-
-const CERT_MAX_UPLOAD_MB = 20;
-
-function isWebCertificateUrl(url: string) {
-  return /^https?:\/\//i.test(String(url ?? "").trim());
-}
-
-function fileExtensionLabel(fileName: string) {
-  const base = fileName.split(/[/\\]/).pop() ?? fileName;
-  const parts = base.split(".");
-  if (parts.length < 2) return "FILE";
-  return parts.pop()!.toUpperCase().slice(0, 8);
-}
-
-function validateCertificateFile(file: File): { valid: boolean; error?: string } {
-  const primary = fileUtils.validateFile(file, CERTIFICATE_MIME_TYPES, CERT_MAX_UPLOAD_MB);
-  if (primary.valid) return { valid: true };
-  const name = file.name.toLowerCase();
-  const sizeMb = file.size / (1024 * 1024);
-  if (sizeMb > CERT_MAX_UPLOAD_MB) return { valid: false, error: primary.error };
-  if (name.endsWith(".zip")) return { valid: true };
-  return { valid: false, error: primary.error };
-}
 
 type MaterialSpecificationBlockProps = {
   block: SpecificationBlock;
@@ -205,32 +170,36 @@ const MaterialSpecificationBlock = ({
     totalCount,
   } = useMaterialBlockState(block, index, onUpdate);
 
-  const certFileInputRef = useRef<HTMLInputElement>(null);
   const showAlert = useAlertStore((state) => state.showAlert);
 
   const handleCertificateFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      const fileList = event.target.files;
-      event.target.value = "";
-      if (!fileList?.length) return;
+      const input = event.currentTarget;
+      const incoming = input.files ? Array.from(input.files) : [];
+      if (!incoming.length) return;
 
-      const incoming = Array.from(fileList);
       const next = [...(block.certificates ?? [])];
       let added = 0;
 
-      for (const file of incoming) {
-        const { valid, error } = validateCertificateFile(file);
-        if (!valid) {
-          showAlert(`${file.name}: ${error ?? formStrings.CERT_INVALID_FILE}`, "warning");
-          continue;
+      try {
+        for (const file of incoming) {
+          const { valid, error } = fileUtils.validateCertificateFile(file);
+          if (!valid) {
+            showAlert(`${file.name}: ${error ?? formStrings.CERT_INVALID_FILE}`, "warning");
+            continue;
+          }
+          const blobUrl = URL.createObjectURL(file);
+          next.push({ fileName: file.name, fileUrl: blobUrl, certificateType: "", file });
+          added += 1;
         }
-        const blobUrl = URL.createObjectURL(file);
-        next.push({ fileName: file.name, fileUrl: blobUrl, certificateType: "" });
-        added += 1;
-      }
 
-      if (added > 0) {
-        onUpdate(index, { ...block, certificates: next });
+        if (added > 0) {
+          onUpdate(index, { ...block, certificates: next });
+        }
+      } finally {
+        queueMicrotask(() => {
+          input.value = "";
+        });
       }
     },
     [block, formStrings.CERT_INVALID_FILE, index, onUpdate, showAlert]
@@ -379,7 +348,7 @@ const MaterialSpecificationBlock = ({
                   )}
                 </TableCell>
 
-                <TableCell sx={theme.workflow.formElements.tableCell} align="top">
+                <TableCell sx={{ ...theme.workflow.formElements.tableCell, verticalAlign: "top" }}>
                   {rowIndex === 0 && (
                     <Box>
                       <TextField
@@ -477,190 +446,14 @@ const MaterialSpecificationBlock = ({
         </Table>
       </TableContainer>
 
-      <Box
-        sx={{
-          px: 2,
-          py: 1.5,
-          borderTop: `1px solid ${alpha(theme.palette?.border || "#ccc", 0.5)}`,
-          background: alpha(theme.palette?.primary ?? "#1B4F72", 0.02),
-        }}
-      >
-        <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "flex-start" }} justifyContent="space-between" gap={1.5} sx={{ mb: 1.5 }}>
-          <Box>
-            <Typography sx={{ ...theme.workflow.formElements.fieldLabel, mb: 0.5 }}>{formStrings.CERTIFICATES_TITLE}</Typography>
-            <Typography sx={{ fontSize: "0.72rem", color: theme.palette.textSub, lineHeight: 1.45, maxWidth: 520 }}>
-              {formStrings.CERTIFICATES_SUBTITLE}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<UploadFileRoundedIcon sx={{ fontSize: "17px !important" }} />}
-            onClick={() => certFileInputRef.current?.click()}
-            sx={{
-              textTransform: "none",
-              fontWeight: 700,
-              flexShrink: 0,
-              borderRadius: 2,
-              borderColor: theme.palette.primaryLight,
-              color: theme.palette.primaryLight,
-              "&:hover": { background: alpha(theme.palette.primaryLight, 0.06) },
-            }}
-          >
-            {formStrings.UPLOAD_CERTIFICATES}
-          </Button>
-          <input
-            ref={certFileInputRef}
-            type="file"
-            hidden
-            multiple
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/zip"
-            onChange={handleCertificateFiles}
-          />
-        </Stack>
-
-        {(block.certificates ?? []).length === 0 ? (
-          <Box
-            onClick={() => certFileInputRef.current?.click()}
-            sx={{
-              border: `2px dashed ${alpha(theme.palette.primaryLight ?? "#2E86C1", 0.35)}`,
-              borderRadius: 2,
-              py: 3,
-              px: 2,
-              textAlign: "center",
-              cursor: "pointer",
-              transition: "all 0.18s",
-              "&:hover": {
-                borderColor: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.65),
-                background: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.04),
-              },
-            }}
-          >
-            <UploadFileRoundedIcon sx={{ fontSize: 32, color: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.45), mb: 1 }} />
-            <Typography sx={{ fontSize: "0.8rem", fontWeight: 600, color: theme.palette.textSub }}>
-              {formStrings.UPLOAD_CERTIFICATES}
-            </Typography>
-            <Typography sx={{ fontSize: "0.7rem", color: alpha(theme.palette.textSub ?? "#5D6D7E", 0.85), mt: 0.5 }}>
-              {formStrings.ADD_MORE_CERTIFICATES}
-            </Typography>
-          </Box>
-        ) : (
-          <List disablePadding sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {(block.certificates ?? []).map((cert, ci) => (
-              <ListItem
-                key={`${cert.fileName}-${ci}-${cert.fileUrl?.slice(0, 24) ?? ""}`}
-                disableGutters
-                sx={{
-                  display: "block",
-                  px: 1.5,
-                  py: 1.25,
-                  borderRadius: 2,
-                  background: alpha(theme.palette.surface ?? "#fff", theme.palette.mode === "dark" ? 0.35 : 1),
-                  border: `1px solid ${alpha(theme.palette.border ?? "#ccc", 0.55)}`,
-                  "&:hover": { borderColor: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.45) },
-                  transition: "border-color 0.15s",
-                }}
-              >
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "flex-start" }}>
-                  <Stack direction="row" alignItems="flex-start" gap={1.2} sx={{ flex: 1, minWidth: 0 }}>
-                    <InsertDriveFileOutlinedIcon sx={{ fontSize: 22, color: theme.palette.primaryLight, flexShrink: 0, mt: 0.25 }} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography
-                        sx={{
-                          fontSize: "0.82rem",
-                          fontWeight: 700,
-                          color: theme.palette.text,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {cert.fileName || formStrings.CERT_FILE_NAME}
-                      </Typography>
-                      <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap" sx={{ mt: 0.75 }}>
-                        <Chip
-                          label={fileExtensionLabel(cert.fileName || "file")}
-                          size="small"
-                          sx={{
-                            height: 20,
-                            fontSize: "0.6rem",
-                            fontWeight: 700,
-                            background: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.1),
-                            color: theme.palette.primaryLight,
-                            border: `1px solid ${alpha(theme.palette.primaryLight ?? "#2E86C1", 0.22)}`,
-                          }}
-                        />
-                        {isWebCertificateUrl(cert.fileUrl) && (
-                          <Tooltip title={formStrings.OPEN_CERT_LINK}>
-                            <IconButton
-                              size="small"
-                              component="a"
-                              href={cert.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              sx={{ color: theme.palette.primaryLight }}
-                            >
-                              <OpenInNewRoundedIcon sx={{ fontSize: 18 }} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Stack>
-                    </Box>
-                  </Stack>
-                  <Box sx={{ width: { xs: "100%", md: 220 }, flexShrink: 0 }}>
-                    <Typography sx={{ ...theme.workflow.formElements.fieldLabel, mb: "4px" }}>{formStrings.CERT_TYPE}</Typography>
-                    <TextField
-                      size="small"
-                      fullWidth
-                      value={cert.certificateType}
-                      onChange={(e) => handleCertChange(ci, "certificateType", e.target.value)}
-                      placeholder={formStrings.CERT_TYPE}
-                      sx={theme.workflow.formElements.textField}
-                    />
-                  </Box>
-                  <Tooltip title={formStrings.REMOVE_CERTIFICATE}>
-                    <IconButton
-                      size="small"
-                      onClick={() => removeCertificate(ci)}
-                      sx={{
-                        alignSelf: { xs: "flex-end", md: "center" },
-                        color: theme.palette.textSub,
-                        "&:hover": { color: theme.palette.danger, background: alpha(theme.palette.danger, 0.08) },
-                      }}
-                    >
-                      <DeleteOutlineRoundedIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </ListItem>
-            ))}
-
-            <Box
-              onClick={() => certFileInputRef.current?.click()}
-              sx={{
-                px: 1.5,
-                py: 1,
-                borderRadius: 2,
-                cursor: "pointer",
-                border: `1.5px dashed ${alpha(theme.palette.primaryLight ?? "#2E86C1", 0.35)}`,
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                transition: "all 0.18s",
-                "&:hover": {
-                  borderColor: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.65),
-                  background: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.04),
-                },
-              }}
-            >
-              <UploadFileRoundedIcon sx={{ fontSize: 17, color: alpha(theme.palette.primaryLight ?? "#2E86C1", 0.75) }} />
-              <Typography sx={{ fontSize: "0.78rem", fontWeight: 600, color: theme.palette.primaryLight }}>
-                {formStrings.ADD_MORE_CERTIFICATES}
-              </Typography>
-            </Box>
-          </List>
-        )}
-      </Box>
+      <CertificateUploadSection
+        certificates={block.certificates ?? []}
+        formStrings={formStrings}
+        theme={theme}
+        onFilesSelected={handleCertificateFiles}
+        onCertChange={handleCertChange}
+        onRemove={removeCertificate}
+      />
     </Box>
   );
 };

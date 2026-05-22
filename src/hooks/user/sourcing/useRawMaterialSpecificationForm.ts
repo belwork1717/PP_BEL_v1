@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { STRINGS } from "../../../app/config/strings";
 import { useAlertStore } from "../../../app/store/alertStore";
 import { useThemeStore } from "../../../app/store/themeStore";
@@ -14,13 +14,19 @@ import type {
 import {
   computeIsOutOfRange,
   flattenMaterialGroups,
-  groupBlocksToMaterialGroups,
+  serializeMaterialBlocks,
 } from "../../../data/models/user/RawMaterialProcurementModel";
 import {
   areAllAnalyzedResultsFilled,
   areBlocksMandatoryComplete,
   areMaterialGroupsMandatoryComplete,
 } from "../../../data/models/user/rawMaterialProcurementValidation";
+import {
+  rmCertDebug,
+  summarizeBlocks,
+  summarizeLotCerts,
+  summarizeMaterialGroups,
+} from "../../../utils/rawMaterialCertUploadDebug";
 
 export type SpecificationRow = SpecRow;
 export type SpecificationBlock = MaterialBlock;
@@ -109,6 +115,10 @@ function cloneLotTemplate(templateRows: SpecRow[]): MaterialLotBlock {
 type SpecificationCacheMap = Record<string, MaterialSpecificationItemModel[]>;
 type LoadingMap = Record<string, boolean>;
 
+function blocksSignature(blocks: SpecificationBlock[]): string {
+  return serializeMaterialBlocks(blocks);
+}
+
 export const useRawMaterialSpecificationForm = ({
   initialBlocks = [],
   isEditMode = false,
@@ -136,6 +146,7 @@ export const useRawMaterialSpecificationForm = ({
   const formStrings = STRINGS.SOURCING.SPECIFICATION_FORM;
   const specStyles = theme.sourcing.rawMaterial.specificationForm;
   const onBlocksChangeRef = useRef(onBlocksChange);
+  const lastSyncedBlocksSigRef = useRef("");
 
   const headerTitle = createLotMode ? formStrings.CREATE_LOT_BUILDER_TITLE : formStrings.TITLE;
   const headerSubtitle = createLotMode ? formStrings.CREATE_LOT_BUILDER_SUBTITLE : formStrings.SUBTITLE;
@@ -225,44 +236,78 @@ export const useRawMaterialSpecificationForm = ({
     };
   }, [formStrings.MATERIALS_FETCH_ERROR, formStrings.MATERIALS_LOAD_FAILED, showAlert]);
 
-  /** Only hydrate from parent when parent has rows (e.g. opened lot / edit). Never clear local blocks when parent is still [] on create — that was wiping in‑progress materials. */
+  /**
+   * Hydrate from parent only for fill/edit. Create Lot keeps local state (casing-aligned);
+   * echoing parent formBlocks here was resetting certificates after upload on remote clients.
+   */
   useLayoutEffect(() => {
-    if (initialBlocks.length === 0) return;
     if (createLotMode) {
-      setMaterialGroups((previous) => {
-        const next = groupBlocksToMaterialGroups(initialBlocks);
-        return previous === next ? previous : next;
-      });
-    } else {
-      setFlatBlocks((previous) => (previous === initialBlocks ? previous : initialBlocks));
+      rmCertDebug("4.layoutEffect.skip", { reason: "createLotMode" });
+      return;
     }
+    if (initialBlocks.length === 0) return;
+
+    const incomingSig = blocksSignature(initialBlocks);
+    rmCertDebug("4.layoutEffect.run", {
+      incomingSigLen: incomingSig.length,
+      lastSyncedLen: lastSyncedBlocksSigRef.current.length,
+      skip: incomingSig === lastSyncedBlocksSigRef.current,
+      blocks: summarizeBlocks(initialBlocks),
+    });
+    if (incomingSig === lastSyncedBlocksSigRef.current) return;
+    lastSyncedBlocksSigRef.current = incomingSig;
+    setFlatBlocks(initialBlocks);
   }, [createLotMode, initialBlocks]);
 
   const blocksRef = useRef<SpecificationBlock[]>([]);
   blocksRef.current = blocks;
 
-  const syncFlattenedBlocks = useCallback((nextBlocks: SpecificationBlock[]) => {
-    onBlocksChangeRef.current?.(nextBlocks);
-  }, []);
+  const syncBlocksToParent = useCallback(
+    (nextBlocks: SpecificationBlock[], source: string) => {
+      const sig = blocksSignature(nextBlocks);
+      const skip = sig === lastSyncedBlocksSigRef.current;
+      rmCertDebug("5.syncBlocksToParent", {
+        source,
+        createLotMode,
+        skip,
+        sigLen: sig.length,
+        blocks: summarizeBlocks(nextBlocks),
+      });
+      if (skip) return;
+      lastSyncedBlocksSigRef.current = sig;
+      startTransition(() => {
+        rmCertDebug("6.onBlocksChange.invoke", { source, blockCount: nextBlocks.length });
+        onBlocksChangeRef.current?.(nextBlocks);
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!onBlocksChangeRef.current) return;
+    syncBlocksToParent(blocks, "effect:blocks");
+  }, [blocks, syncBlocksToParent]);
+
+  /** Create Lot: also sync when material groups change (cert upload updates lots before flatten memo). */
+  useEffect(() => {
+    if (!createLotMode || !onBlocksChangeRef.current) return;
+    syncBlocksToParent(flattenMaterialGroups(materialGroups), "effect:materialGroups");
+  }, [createLotMode, materialGroups, syncBlocksToParent]);
 
   const updateMaterialGroups = useCallback(
     (updater: MaterialFormGroup[] | ((previous: MaterialFormGroup[]) => MaterialFormGroup[])) => {
-      setMaterialGroups((previous) => {
-        const nextGroups = typeof updater === "function" ? updater(previous) : updater;
-        syncFlattenedBlocks(flattenMaterialGroups(nextGroups));
-        return nextGroups;
-      });
+      setMaterialGroups((previous) =>
+        typeof updater === "function" ? updater(previous) : updater
+      );
     },
-    [syncFlattenedBlocks]
+    []
   );
 
   const updateBlocks = useCallback(
     (updater: SpecificationBlock[] | ((previous: SpecificationBlock[]) => SpecificationBlock[])) => {
-      setFlatBlocks((previous) => {
-        const nextBlocks = typeof updater === "function" ? updater(previous) : updater;
-        onBlocksChangeRef.current?.(nextBlocks);
-        return nextBlocks;
-      });
+      setFlatBlocks((previous) =>
+        typeof updater === "function" ? updater(previous) : updater
+      );
     },
     []
   );
@@ -386,17 +431,32 @@ export const useRawMaterialSpecificationForm = ({
 
   const handleUpdateLot = useCallback(
     (materialIndex: number, lotIndex: number, lot: MaterialLotBlock) => {
-      updateMaterialGroups((previous) =>
-        previous.map((group, gIdx) => {
+      rmCertDebug("4.handleUpdateLot", {
+        materialIndex,
+        lotIndex,
+        createLotMode,
+        lot: summarizeLotCerts(lot),
+      });
+      updateMaterialGroups((previous) => {
+        const nextGroups = previous.map((group, gIdx) => {
           if (gIdx !== materialIndex) return group;
           return {
             ...group,
             lots: group.lots.map((existing, lIdx) => (lIdx === lotIndex ? lot : existing)),
           };
-        })
-      );
+        });
+        rmCertDebug("4.handleUpdateLot.state", {
+          groups: summarizeMaterialGroups(nextGroups),
+        });
+        if (createLotMode) {
+          queueMicrotask(() =>
+            syncBlocksToParent(flattenMaterialGroups(nextGroups), "microtask:handleUpdateLot")
+          );
+        }
+        return nextGroups;
+      });
     },
-    [updateMaterialGroups]
+    [createLotMode, syncBlocksToParent, updateMaterialGroups]
   );
 
   const handleRemoveMaterial = useCallback(
@@ -471,11 +531,13 @@ export const useRawMaterialSpecificationForm = ({
 
   const handleConfirmDraft = useCallback(async () => {
     setDraftConfirm(false);
+    rmCertDebug("7.saveDraft.blocksRef", { blocks: summarizeBlocks(blocksRef.current) });
     await onSaveDraft?.(blocksRef.current);
   }, [onSaveDraft]);
 
   const handleConfirmSubmit = useCallback(async () => {
     setSubmitConfirm(false);
+    rmCertDebug("7.submit.blocksRef", { blocks: summarizeBlocks(blocksRef.current) });
     await onSubmit?.(blocksRef.current);
   }, [onSubmit]);
 

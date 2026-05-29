@@ -60,6 +60,15 @@ export const getRawMaterialPreparationTheme = (baseTheme: any) => {
 		},
 		header: {
 			contentPadding: { p: "14px 18px" },
+			scaleChip: (color: string) => ({
+				height: 22,
+				fontSize: "calc(0.65rem + 2px)",
+				fontWeight: 700,
+				background: alpha(color, 0.1),
+				color,
+				border: `1px solid ${alpha(color, 0.28)}`,
+				"& .MuiChip-label": { px: 1.2 },
+			}),
 			typeChip: (color: string) => ({
 				height: 20,
 				fontSize: "0.65rem",
@@ -188,6 +197,140 @@ export const getRawMaterialPreparationTheme = (baseTheme: any) => {
 				color: cfg.color,
 				border: `1px solid ${cfg.border}`,
 			}),
+		},
+		flowBar: {
+			container: {
+				mb: 2,
+				p: 1.5,
+				borderRadius: 3,
+				border: `1px solid ${alpha(palette.border, 0.9)}`,
+				background: alpha(palette.surface, 0.6),
+				...baseTheme.workflow.animatedContainer,
+			},
+			selectField: (width: number | string = "100%") => ({
+				width,
+				flexShrink: 0,
+			}),
+			selectLabel: {
+				fontSize: "0.72rem",
+				fontWeight: 700,
+				color: palette.primary,
+				letterSpacing: "0.03em",
+				mb: 0.65,
+				display: "block",
+			},
+			selectInput: (hasValue: boolean, accentColor: string) => ({
+				"& .MuiOutlinedInput-root": {
+					borderRadius: 2.5,
+					background: palette.pageBg ?? "#fff",
+					fontSize: "0.82rem",
+					transition: "all 0.2s ease",
+					"& fieldset": {
+						borderColor: alpha(palette.border, 0.95),
+					},
+					"&:hover fieldset": {
+						borderColor: alpha(accentColor, 0.55),
+					},
+					"&.Mui-focused fieldset": {
+						borderColor: accentColor,
+						borderWidth: 2,
+					},
+					"&.Mui-disabled": {
+						background: alpha(palette.surface, 0.8),
+					},
+				},
+				"& .MuiSelect-select": {
+					fontWeight: hasValue ? 600 : 500,
+					color: hasValue ? palette.text : palette.textSub,
+					py: 1,
+				},
+				"& .MuiSelect-icon": {
+					color: hasValue ? accentColor : alpha(palette.textSub, 0.6),
+				},
+			}),
+			selectPlaceholder: {
+				color: palette.textSub,
+				fontSize: "0.82rem",
+				fontWeight: 500,
+			},
+			selectMenuPaper: {
+				borderRadius: 2.5,
+				mt: 0.5,
+				maxHeight: 320,
+				boxShadow: `0 10px 28px ${alpha(palette.primary, 0.14)}`,
+				border: `1px solid ${alpha(palette.border, 0.85)}`,
+				"& .MuiMenuItem-root": {
+					fontSize: "0.82rem",
+					py: 1,
+					px: 1.5,
+					borderRadius: 1.5,
+					mx: 0.75,
+					my: 0.25,
+				},
+			},
+			premixMenuItem: (selected: boolean, accentColor: string) => ({
+				fontWeight: selected ? 700 : 500,
+				color: selected ? accentColor : palette.text,
+				background: selected ? alpha(accentColor, 0.08) : "transparent",
+				"&:hover": { background: alpha(accentColor, 0.1) },
+			}),
+			materialMenuItem: (selected: boolean) => ({
+				alignItems: "flex-start",
+				flexDirection: "column",
+				gap: 0.2,
+				background: selected ? alpha(palette.primaryLight, 0.08) : "transparent",
+				"&:hover": { background: alpha(palette.primaryLight, 0.06) },
+			}),
+			materialMenuPrimary: (selected: boolean) => ({
+				fontWeight: 600,
+				fontSize: "0.82rem",
+				color: selected ? palette.primary : palette.text,
+				lineHeight: 1.35,
+			}),
+			materialMenuMeta: {
+				fontSize: "0.7rem",
+				color: palette.textSub,
+				fontWeight: 500,
+			},
+			topRow: {
+				display: "flex",
+				flexWrap: "wrap",
+				alignItems: "flex-start",
+				gap: 2,
+			},
+			processField: {
+				flex: 1,
+				minWidth: 260,
+			},
+			processControlRow: {
+				minHeight: 40,
+				display: "flex",
+				flexWrap: "wrap",
+				alignItems: "center",
+				gap: 1.25,
+			},
+			materialSelectorBox: {
+				p: "14px 18px",
+				borderRadius: 3,
+				background: `linear-gradient(135deg, ${alpha(palette.primary, 0.04)}, ${alpha(palette.primaryLight, 0.03)})`,
+				border: `1.5px dashed ${alpha(palette.primaryLight, 0.35)}`,
+			},
+			fieldLabel: { fontSize: "0.72rem", fontWeight: 700, color: palette.primary, mb: 0.6 },
+			processCheckbox: {
+				"& .MuiFormControlLabel-label": {
+					fontSize: "0.8rem",
+					fontWeight: 600,
+				},
+			},
+			materialSelectRow: {
+				mt: 0.5,
+			},
+			select: {
+				borderRadius: 2,
+				background: palette.surface,
+				"& .MuiOutlinedInput-notchedOutline": { borderColor: alpha(palette.border, 0.9) },
+				"& .MuiSelect-select": { fontSize: "0.8rem", fontWeight: 600 },
+			},
 		},
 		builder: {
 			sectionContainer: {

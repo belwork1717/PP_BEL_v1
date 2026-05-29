@@ -8,6 +8,24 @@ import useRawMaterialPrepHook from "../../../../../hooks/user/manufacturing/useR
 import RawMaterialBuilderForm from "./RawMaterialBuilderPage";
 import RawMaterialPreparationHeader from "./RawMaterialPreparationHeader";
 import RawMaterialPreparationList from "./RawMaterialPreparationList";
+import { MANUFACTURING_STATUS } from "../../../../../hooks/user/manufacturing/manufacturingWorkflowData";
+import { DEFAULT_SELECTED_PROCESSES } from "../../../../../hooks/user/manufacturing/rawMaterialPrepFlowConfig";
+
+/** Temporary dummy row for Initiated-state UI work until batch list API is wired. */
+const DUMMY_INITIATED_BATCH = {
+  batchId: "BATCH-2024-001",
+  formId: null,
+  batchType: "Main Scale",
+  motorId: "RM-ACEM-2024-001",
+  motorType: "A",
+  priority: "High",
+  material: "Type not selected yet",
+  assignedTo: { id: "USR-012", fullName: "Rajesh Kumar" },
+  createdOn: "2024-01-10T08:00:00Z",
+  rmStatus: MANUFACTURING_STATUS.INITIATED,
+  status: MANUFACTURING_STATUS.INITIATED,
+  rejectionReason: null,
+};
 
 const RawMaterialPreparationPage = () => {
   const mode = useThemeStore((state) => state.mode);
@@ -28,21 +46,49 @@ const RawMaterialPreparationPage = () => {
     solidInstances,
     liquidPartA,
     liquidRows,
-    linearData,
     actionLoading,
     selectedTypes,
-    setSelectedTypes,
-    solidHasData,
-    liquidHasData,
-    linearHasData,
+    selectedPremix,
+    selectedProcesses,
+    solidMaterialCode,
+    liquidMaterialCode,
+    availableMaterials,
+    loadingMaterials,
+    availablePremixOptions,
+    handlePremixChange,
+    handleProcessToggle,
+    handleSolidMaterialChange,
+    handleLiquidMaterialChange,
+    handleAddPremixSelection,
+    addedPremixSelections,
+    premixSessions,
+    handlePremixSolidBlocksChange,
+    handlePremixLiquidBlocksChange,
     handleBack,
     handleDiscardAndBack,
     handleSolidBlocksChange,
     handleLiquidBlocksChange,
-    handleLinearBlocksChange,
     handleSaveDraft,
     handleSubmit,
   } = hookState;
+
+  const processes = { ...DEFAULT_SELECTED_PROCESSES, ...(selectedProcesses ?? {}) };
+
+  const listHookState = useMemo(() => {
+    const existing = hookState.batches ?? [];
+    const hasDummy = existing.some((b) => b.batchId === DUMMY_INITIATED_BATCH.batchId);
+    if (hasDummy) return hookState;
+
+    return {
+      ...hookState,
+      batches: [DUMMY_INITIATED_BATCH, ...existing],
+      statusCounts: {
+        ...hookState.statusCounts,
+        initiated: (hookState.statusCounts?.initiated ?? 0) + 1,
+      },
+      totalRecords: (hookState.totalRecords ?? 0) + 1,
+    };
+  }, [hookState]);
 
   if (loading) {
     return <Box sx={theme.workflow.loadingContainer}><CircularProgress size={theme.manufacturing.rawMaterialPrep.page.loadingSpinnerSize} /></Box>;
@@ -50,7 +96,7 @@ const RawMaterialPreparationPage = () => {
 
   return (
     <Box sx={theme.workflow.animatedContainer}>
-      {view === "list" && <RawMaterialPreparationList hookState={hookState} />}
+      {view === "list" && <RawMaterialPreparationList hookState={listHookState} />}
 
       {view === "form" && activeBatch && (
         <Box>
@@ -58,11 +104,6 @@ const RawMaterialPreparationPage = () => {
             batch={activeBatch}
             isEdit={isEditMode}
             onBack={handleBack}
-            selectedTypes={selectedTypes}
-            onTypesChange={setSelectedTypes}
-            solidBuilderHasData={solidHasData}
-            liquidBuilderHasData={liquidHasData}
-            linearBuilderHasData={linearHasData}
             theme={theme}
           />
 
@@ -70,19 +111,38 @@ const RawMaterialPreparationPage = () => {
             activeBatch={activeBatch}
             isEditMode={isEditMode}
             selectedTypes={selectedTypes}
+            selectedPremix={selectedPremix}
+            selectedProcesses={selectedProcesses}
+            solidMaterialCode={solidMaterialCode}
+            liquidMaterialCode={liquidMaterialCode}
+            availableMaterials={availableMaterials}
+            loadingMaterials={loadingMaterials}
+            availablePremixOptions={availablePremixOptions}
+            onPremixChange={handlePremixChange}
+            onProcessToggle={handleProcessToggle}
+            onSolidMaterialChange={handleSolidMaterialChange}
+            onLiquidMaterialChange={handleLiquidMaterialChange}
+            onAddPremixSelection={handleAddPremixSelection}
+            addedPremixSelections={addedPremixSelections}
+            premixSessions={premixSessions}
+            onPremixSolidBlocksChange={handlePremixSolidBlocksChange}
+            onPremixLiquidBlocksChange={handlePremixLiquidBlocksChange}
             theme={theme}
             handleBack={handleBack}
             solidInstances={solidInstances}
             liquidPartA={liquidPartA}
             liquidRows={liquidRows}
-            linearData={linearData}
             handleSolidBlocksChange={handleSolidBlocksChange}
             handleLiquidBlocksChange={handleLiquidBlocksChange}
-            handleLinearBlocksChange={handleLinearBlocksChange}
             onSaveDraft={() => setDraftConfirmOpen(true)}
             onSubmit={() => setSubmitConfirmOpen(true)}
             actionLoading={actionLoading}
-            disableActions={!materialTypesArray.length}
+            disableActions={
+              selectedPremix === "" ||
+              (!processes.solid && !processes.liquid) ||
+              (processes.solid && !solidMaterialCode) ||
+              (processes.liquid && !liquidMaterialCode)
+            }
           />
         </Box>
       )}

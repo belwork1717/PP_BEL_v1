@@ -8,6 +8,9 @@ import {
   fetchRawMaterialPreparationFormDetailsApi,
   updateRawMaterialPreparationFormApi,
 } from "../../../data/api/users/manufacturing/rawMaterialPreparationApi";
+import { fetchRawMaterialProcessingSchemaApi } from "../../../data/api/users/manufacturing/rawMaterialProcessingSchemaApi";
+import { normalizeRawMaterialProcessingSchema } from "../../../data/models/user/RawMaterialProcessingSchemaModel";
+import type { RawMaterialProcessingSchema } from "../../../data/models/user/rawMaterialProcessingSchema.types";
 
 export type RawMaterialPreparationCreatePayload = {
   batchId: string;
@@ -65,6 +68,10 @@ export type RawMaterialPreparationDetailsPayload = {
   subDepartmentId: number;
 };
 
+export type RawMaterialProcessingSchemaPayload = {
+  materialCode: string;
+};
+
 export const rawMaterialPreparationController = {
   createForm: async (payload: RawMaterialPreparationCreatePayload) => {
     try {
@@ -98,6 +105,18 @@ export const rawMaterialPreparationController = {
       );
     } catch (error) {
       console.error("Failed to update raw material preparation form:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  fetchProcessingSchema: async (payload: RawMaterialProcessingSchemaPayload) => {
+    try {
+      const response = await fetchRawMaterialProcessingSchemaApi(payload);
+      return new ApiResponseModel<RawMaterialProcessingSchema | null>(response, (res) =>
+        normalizeRawMaterialProcessingSchema(res)
+      );
+    } catch (error) {
+      console.error("Failed to fetch raw material processing schema:", error);
       return new ApiResponseModel(error);
     }
   },

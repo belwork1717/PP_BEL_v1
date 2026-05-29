@@ -24,6 +24,8 @@ type UserWorkflowFormHeaderProps = {
   editLabel?: string;
   rejectionTitle?: string;
   additionalChips?: ReactNode;
+  /** Rendered below batch title, above status chips (e.g. Main Scale / Sub Scale banner). */
+  headerBanner?: ReactNode;
   footerContent?: ReactNode;
   headerContentSx?: any;
   theme: any;
@@ -40,6 +42,7 @@ const UserWorkflowFormHeader = ({
   editLabel = "Editing Rejected Submission",
   rejectionTitle = "Rejection Reason",
   additionalChips,
+  headerBanner,
   footerContent,
   headerContentSx,
   theme,
@@ -75,6 +78,7 @@ const UserWorkflowFormHeader = ({
                 <Typography sx={theme.workflow.formHeader.motorId}>{batch.motorId}</Typography>
               </Stack>
             )}
+            {headerBanner}
             <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
               {isEdit ? (
                 <Chip

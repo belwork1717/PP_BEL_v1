@@ -20,6 +20,7 @@ import {
   TableHead, TableRow, InputAdornment,
   MenuItem, Button, IconButton, Tooltip,
   Radio, RadioGroup, FormControlLabel,
+  CircularProgress,
 } from "@mui/material";
 import { styled, keyframes } from "@mui/material/styles";
 
@@ -35,6 +36,8 @@ import {
   SOLID_PROCESSES,
 } from "../../../../../hooks/user/manufacturing/solidPreparationConfig";
 import useSolidPreparationHook from "../../../../../hooks/user/manufacturing/useSolidPreparationHook";
+import { useRawMaterialProcessingSchema } from "../../../../../hooks/user/manufacturing/useRawMaterialProcessingSchema";
+import SchemaDrivenSolidPreparation from "./SchemaDrivenSolidPreparation";
 
 const {
   grain: GrainRoundedIcon,
@@ -1624,6 +1627,7 @@ const ProcessPlaceholder = ({ processLabel, Icon, instanceId, onRemove, animDela
  */
 const SolidPreparation = ({
   data          = {},
+  selectedMaterialCode = "",
   initialInstances = [],
   isEditMode    = false,
   onBlocksChange,
@@ -1643,8 +1647,49 @@ const SolidPreparation = ({
     handleAlProcessingChange,
   } = useSolidPreparationHook(initialInstances, onBlocksChange);
 
+  const materialCode = String(selectedMaterialCode ?? "").trim();
+  const { schema, loading, error, usedFallback } = useRawMaterialProcessingSchema(materialCode);
+
+  const savedSchemaPayload = React.useMemo(() => {
+    const saved = initialInstances.find((inst) => inst.processKey === "schema_driven");
+    return saved?.data as { gradeCode?: string; sectionData?: Record<string, Record<string, unknown>[]> } | undefined;
+  }, [initialInstances]);
+
+  if (materialCode) {
+    if (loading) {
+      return (
+        <Box sx={{ py: 5, textAlign: "center" }}>
+          <CircularProgress size={28} sx={{ color: BRAND.solid }} />
+          <Typography sx={{ mt: 1.2, fontSize: "0.82rem", color: BRAND.textSub }}>
+            Loading processing schema…
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (schema) {
+      return (
+        <SchemaDrivenSolidPreparation
+          schema={schema}
+          usedFallback={usedFallback}
+          initialPayload={savedSchemaPayload}
+          onBlocksChange={onBlocksChange}
+        />
+      );
+    }
+
+  }
+
   return (
     <Box sx={{ fontFamily: "'DM Sans', sans-serif" }}>
+      {materialCode && error && (
+        <Box sx={{ mb: 2, py: 1.5, px: 2, borderRadius: 2, border: `1px dashed ${alpha(BRAND.border, 0.9)}` }}>
+          <Typography sx={{ fontSize: "0.82rem", color: BRAND.danger }}>{error}</Typography>
+          <Typography sx={{ fontSize: "0.75rem", color: BRAND.textSub, mt: 0.5 }}>
+            Using standard solid process form below.
+          </Typography>
+        </Box>
+      )}
 
       {/* ── Section title ── */}
       <Stack direction="row" alignItems="center" gap={1.5} mb={2.5}>

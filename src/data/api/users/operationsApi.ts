@@ -1,12 +1,13 @@
 import { get, post } from "../httpClient";
 import { USER_OPERATIONS_ENDPOINTS } from "../endPoints";
+import type { MaterialsListRequest } from "../../models/user/MaterialsListModel";
 
 export const fetchSubdepartmentBatchesApi = async (payload: any) => {
   return await post(USER_OPERATIONS_ENDPOINTS.BATCH_LIST, payload);
 };
 
-export const fetchMaterialsListApi = async () => {
-  return await get(USER_OPERATIONS_ENDPOINTS.MATERIALS_LIST);
+export const fetchMaterialsListApi = async (payload: MaterialsListRequest) => {
+  return await post(USER_OPERATIONS_ENDPOINTS.MATERIALS_LIST, payload);
 };
 
 export const fetchMaterialSpecificationListApi = async (payload: { materialCode: string }) => {

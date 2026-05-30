@@ -20,7 +20,8 @@ const RawMaterialBuilderForm = ({
   selectedProcesses,
   solidMaterialCode,
   liquidMaterialCode,
-  availableMaterials,
+  availableSolidMaterials,
+  availableLiquidMaterials,
   loadingMaterials,
   availablePremixOptions,
   onPremixChange,
@@ -77,7 +78,8 @@ const RawMaterialBuilderForm = ({
         selectedProcesses={selectedProcesses}
         solidMaterialCode={solidMaterialCode}
         liquidMaterialCode={liquidMaterialCode}
-        availableMaterials={availableMaterials}
+        availableSolidMaterials={availableSolidMaterials}
+        availableLiquidMaterials={availableLiquidMaterials}
         loadingMaterials={loadingMaterials}
         availablePremixOptions={availablePremixOptions}
         onPremixChange={onPremixChange}

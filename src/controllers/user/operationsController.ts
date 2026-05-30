@@ -8,6 +8,11 @@ import {
   fetchApprovedMotorsListApi,
 } from "../../data/api/users/operationsApi";
 import { ApiResponseModel } from "../../data/models/common/ApiResponseModel";
+import {
+  normalizeMaterialsListResponse,
+  type MaterialsListItem,
+  type MaterialsListRequest,
+} from "../../data/models/user/MaterialsListModel";
 import { MaterialSpecificationListModel } from "../../data/models/user/MaterialSpecificationModel";
 import {
   DimensionalParametersListModel,
@@ -53,14 +58,61 @@ export const operationsController = {
   },
 
   /**
-   * Common API to fetch materials list for Sourcing.
+   * Fetch materials by type (SOLID | LIQUID) from subdepartment materials-list.
    */
-  fetchMaterialsList: async () => {
+  fetchMaterialsList: async (payload: MaterialsListRequest) => {
     try {
-      const response = await fetchMaterialsListApi();
-      return new ApiResponseModel(response);
+      const response = await fetchMaterialsListApi(payload);
+      return new ApiResponseModel<MaterialsListItem[]>(response, (res) =>
+        normalizeMaterialsListResponse(res?.data)
+      );
     } catch (error) {
       console.error("Failed to fetch materials list:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  /**
+   * Fetch solid + liquid materials and merge for dropdowns that need all types.
+   */
+  fetchAllMaterialsList: async () => {
+    try {
+      const [solidResponse, liquidResponse] = await Promise.all([
+        fetchMaterialsListApi({ materialType: "SOLID" }),
+        fetchMaterialsListApi({ materialType: "LIQUID" }),
+      ]);
+
+      const solidList =
+        solidResponse?.success && Array.isArray(solidResponse.data)
+          ? normalizeMaterialsListResponse(solidResponse.data)
+          : [];
+      const liquidList =
+        liquidResponse?.success && Array.isArray(liquidResponse.data)
+          ? normalizeMaterialsListResponse(liquidResponse.data)
+          : [];
+      const merged = [...solidList, ...liquidList];
+
+      if (merged.length > 0) {
+        return new ApiResponseModel<MaterialsListItem[]>({
+          success: true,
+          statusCode: 200,
+          message: solidResponse?.message ?? liquidResponse?.message ?? "Materials fetched successfully",
+          data: merged,
+        });
+      }
+
+      const failedResponse = solidResponse?.success === false ? solidResponse : liquidResponse;
+      return new ApiResponseModel<MaterialsListItem[]>(
+        failedResponse ?? {
+          success: false,
+          statusCode: 500,
+          message: "Failed to fetch materials",
+          data: null,
+        },
+        (res) => normalizeMaterialsListResponse(res?.data)
+      );
+    } catch (error) {
+      console.error("Failed to fetch all materials list:", error);
       return new ApiResponseModel(error);
     }
   },

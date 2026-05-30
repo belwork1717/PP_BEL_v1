@@ -3,6 +3,10 @@ import { STRINGS } from "../../../app/config/strings";
 import { useAuthStore } from "../../../app/store/authStore";
 import { useUserBatchRefreshStore } from "../../../app/store/userBatchRefreshStore";
 import { operationsController } from "../../../controllers/user/operationsController";
+import {
+  toMaterialCodeNameOptions,
+  type MaterialsListItem,
+} from "../../../data/models/user/MaterialsListModel";
 import rawMaterialProcurementController from "../../../controllers/user/sourcing/rawMaterialProcurementController";
 import { OPERATION_STATUS } from "../../operationStatus";
 import { mapLotListApiRow, RawMaterialLotListRequest } from "../../../data/models/user/RawMaterialProcurementModel";
@@ -28,15 +32,8 @@ const emptyAdvanced: RawMaterialLotListAdvancedFilters = {
   toDate: "",
 };
 
-const normalizeMaterialsList = (data: unknown): SubdeptMaterialOption[] => {
-  const raw = Array.isArray(data) ? data : (data as { materials?: unknown[]; items?: unknown[] })?.materials ?? (data as { items?: unknown[] })?.items ?? [];
-  return raw
-    .map((m: Record<string, unknown>) => ({
-      materialCode: String(m?.materialCode ?? m?.code ?? ""),
-      materialName: String(m?.materialName ?? m?.name ?? ""),
-    }))
-    .filter((m) => m.materialCode);
-};
+const normalizeMaterialsList = (items: MaterialsListItem[]): SubdeptMaterialOption[] =>
+  toMaterialCodeNameOptions(items);
 
 const mapLotListStatusCountsForUi = (
   server: Record<string, number> | undefined,
@@ -108,7 +105,7 @@ export const useRawMaterialLotList = () => {
       }
       setMaterialsLoading(true);
       try {
-        const res = await operationsController.fetchMaterialsList();
+        const res = await operationsController.fetchAllMaterialsList();
         if (!active) return;
         if (res?.success && res.data != null) {
           setMaterialOptions(normalizeMaterialsList(res.data));

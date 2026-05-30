@@ -1,6 +1,6 @@
 // src/hooks/user/manufacturing/useRawMaterialPrepHook.ts
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { operationsController } from "../../../controllers/user/operationsController";
 import { useAlertStore } from "../../../app/store/alertStore";
 import { useAuthStore } from "../../../app/store/authStore";
@@ -97,11 +97,6 @@ const DEFAULT_LIQUID_PART_A: LiquidPartAState = {
   time: String(PART_A_INITIAL.time ?? ""),
 };
 const DEFAULT_LINEAR = createLinearPreparationData();
-const AP_MATERIAL_FALLBACK: RawMaterialPrepMaterialOption = {
-  materialCode: "AP",
-  materialName: "Ammonium Perchlorate",
-  specCount: 3,
-};
 
 const createEmptyPremixSession = (): PremixSession => ({
   selectedProcesses: { ...DEFAULT_SELECTED_PROCESSES },
@@ -185,7 +180,8 @@ export const useRawMaterialPrepHook = () => {
   );
   const [solidMaterialCode, setSolidMaterialCode] = useState("");
   const [liquidMaterialCode, setLiquidMaterialCode] = useState("");
-  const [availableMaterials, setAvailableMaterials] = useState<RawMaterialPrepMaterialOption[]>([]);
+  const [availableSolidMaterials, setAvailableSolidMaterials] = useState<RawMaterialPrepMaterialOption[]>([]);
+  const [availableLiquidMaterials, setAvailableLiquidMaterials] = useState<RawMaterialPrepMaterialOption[]>([]);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [completedPremixesByBatch, setCompletedPremixesByBatch] = useState<Record<string, number[]>>({});
   const [premixSessionsByBatch, setPremixSessionsByBatch] = useState<
@@ -220,35 +216,102 @@ export const useRawMaterialPrepHook = () => {
 
   const hasProcessSelected = safeSelectedProcesses.solid || safeSelectedProcesses.liquid;
 
-  const loadMaterials = useCallback(async () => {
-    setLoadingMaterials(true);
-    try {
-      const response = await operationsController.fetchMaterialsList();
+  const loadMaterialsByType = useCallback(
+    async (materialType: "SOLID" | "LIQUID", options?: { silent?: boolean }) => {
+      const response = await operationsController.fetchMaterialsList({ materialType });
       if (response?.success && response?.data) {
-        const normalized = normalizeMaterialsList(response.data);
-        const hasAP = normalized.some((item) => item.materialCode.toUpperCase() === "AP");
-        setAvailableMaterials(hasAP ? normalized : [...normalized, AP_MATERIAL_FALLBACK]);
-        return true;
+        return normalizeMaterialsList(response.data);
       }
-      setAvailableMaterials([]);
-      showAlert(
-        response?.message || STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_LOAD_FAILED,
-        "error"
-      );
-      return false;
-    } catch {
-      setAvailableMaterials([]);
-      showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_FETCH_ERROR, "error");
-      return false;
-    } finally {
+      if (!options?.silent) {
+        showAlert(
+          response?.message || STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_LOAD_FAILED,
+          "error"
+        );
+      }
+      return [];
+    },
+    [showAlert]
+  );
+
+  const materialsLoadCountRef = useRef(0);
+
+  const beginMaterialsLoad = useCallback(() => {
+    materialsLoadCountRef.current += 1;
+    setLoadingMaterials(true);
+  }, []);
+
+  const endMaterialsLoad = useCallback(() => {
+    materialsLoadCountRef.current = Math.max(0, materialsLoadCountRef.current - 1);
+    if (materialsLoadCountRef.current === 0) {
       setLoadingMaterials(false);
     }
-  }, [showAlert]);
+  }, []);
 
   useEffect(() => {
-    if (view !== "form") return;
-    void loadMaterials();
-  }, [view, loadMaterials]);
+    if (view !== "form" || !safeSelectedProcesses.solid) {
+      setAvailableSolidMaterials([]);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      beginMaterialsLoad();
+      try {
+        const list = await loadMaterialsByType("SOLID", { silent: true });
+        if (!cancelled) {
+          setAvailableSolidMaterials(list);
+          if (list.length === 0) {
+            showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_LOAD_FAILED, "error");
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableSolidMaterials([]);
+          showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_FETCH_ERROR, "error");
+        }
+      } finally {
+        if (!cancelled) endMaterialsLoad();
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, safeSelectedProcesses.solid, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
+
+  useEffect(() => {
+    if (view !== "form" || !safeSelectedProcesses.liquid) {
+      setAvailableLiquidMaterials([]);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      beginMaterialsLoad();
+      try {
+        const list = await loadMaterialsByType("LIQUID", { silent: true });
+        if (!cancelled) {
+          setAvailableLiquidMaterials(list);
+          if (list.length === 0) {
+            showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_LOAD_FAILED, "error");
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setAvailableLiquidMaterials([]);
+          showAlert(STRINGS.SOURCING.SPECIFICATION_FORM.MATERIALS_FETCH_ERROR, "error");
+        }
+      } finally {
+        if (!cancelled) endMaterialsLoad();
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, safeSelectedProcesses.liquid, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
 
   const materialTypesArray = useMemo(() => {
     const types: Array<"solid" | "liquid"> = [];
@@ -387,6 +450,10 @@ export const useRawMaterialPrepHook = () => {
     setSelectedProcesses(defaults.selectedProcesses);
     setSolidMaterialCode(defaults.solidMaterialCode);
     setLiquidMaterialCode(defaults.liquidMaterialCode);
+    setAvailableSolidMaterials([]);
+    setAvailableLiquidMaterials([]);
+    materialsLoadCountRef.current = 0;
+    setLoadingMaterials(false);
     setSolidInstances(defaults.solidInstances);
     setLiquidPartA(defaults.liquidPartA);
     setLiquidRows(defaults.liquidRows);
@@ -564,21 +631,20 @@ export const useRawMaterialPrepHook = () => {
         ...(prev ?? {}),
         [process]: checked,
       }));
-      if (checked && !loadingMaterials && availableMaterials.length === 0) {
-        void loadMaterials();
-      }
       if (!checked) {
         if (process === "solid") {
           setSolidMaterialCode("");
           setSolidInstances([]);
+          setAvailableSolidMaterials([]);
         } else {
           setLiquidMaterialCode("");
           setLiquidPartA({ ...DEFAULT_LIQUID_PART_A });
           setLiquidRows([]);
+          setAvailableLiquidMaterials([]);
         }
       }
     },
-    [availableMaterials.length, loadMaterials, loadingMaterials]
+    []
   );
 
   const handleSolidMaterialChange = useCallback((materialCode: string) => {
@@ -862,7 +928,8 @@ export const useRawMaterialPrepHook = () => {
     selectedProcesses: safeSelectedProcesses,
     solidMaterialCode,
     liquidMaterialCode,
-    availableMaterials: Array.isArray(availableMaterials) ? availableMaterials : [],
+    availableSolidMaterials: Array.isArray(availableSolidMaterials) ? availableSolidMaterials : [],
+    availableLiquidMaterials: Array.isArray(availableLiquidMaterials) ? availableLiquidMaterials : [],
     loadingMaterials,
     availablePremixOptions,
     completedPremixes,

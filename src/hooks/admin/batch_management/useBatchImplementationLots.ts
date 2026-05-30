@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { operationsController } from "../../../controllers/user/operationsController";
+import {
+  toMaterialCodeNameOptions,
+  type MaterialsListItem,
+} from "../../../data/models/user/MaterialsListModel";
 import rawMaterialProcurementController from "../../../controllers/user/sourcing/rawMaterialProcurementController";
 import { mapLotListApiRow, type RawMaterialLotListRow } from "../../../data/models/user/RawMaterialProcurementModel";
 import { OPERATION_STATUS } from "../../operationStatus";
@@ -10,19 +14,8 @@ export type BatchMaterialOption = {
   materialName: string;
 };
 
-const normalizeMaterialsList = (data: unknown): BatchMaterialOption[] => {
-  const raw = Array.isArray(data)
-    ? data
-    : (data as { materials?: unknown[]; items?: unknown[] })?.materials ??
-      (data as { items?: unknown[] })?.items ??
-      [];
-  return raw
-    .map((m: Record<string, unknown>) => ({
-      materialCode: String(m?.materialCode ?? m?.code ?? ""),
-      materialName: String(m?.materialName ?? m?.name ?? ""),
-    }))
-    .filter((m) => m.materialCode);
-};
+const normalizeMaterialsList = (items: MaterialsListItem[]): BatchMaterialOption[] =>
+  toMaterialCodeNameOptions(items);
 
 export const normalizeMaterialCodeKey = (code: string | undefined | null): string =>
   String(code ?? "").trim().toUpperCase();
@@ -52,7 +45,7 @@ export const useBatchImplementationLots = ({ open, subDepartmentId }: UseBatchIm
   const loadMaterials = useCallback(async () => {
     setLoadingMaterials(true);
     try {
-      const res = await operationsController.fetchMaterialsList();
+      const res = await operationsController.fetchAllMaterialsList();
       if (res?.success && res.data != null) {
         setMaterialOptions(normalizeMaterialsList(res.data));
       } else {

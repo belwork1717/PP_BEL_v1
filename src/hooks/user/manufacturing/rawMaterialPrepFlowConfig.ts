@@ -1,3 +1,9 @@
+import {
+  normalizeMaterialsListResponse,
+  type MaterialsListGrade,
+  type MaterialsListItem,
+} from "../../../data/models/user/MaterialsListModel";
+
 export const PREMIX_COUNT = 15;
 
 export const PREMIX_OPTIONS = Array.from({ length: PREMIX_COUNT }, (_, i) => i + 1);
@@ -11,27 +17,22 @@ export const DEFAULT_SELECTED_PROCESSES: RawMaterialPrepSelectedProcesses = {
   liquid: false,
 };
 
-export type RawMaterialPrepMaterialOption = {
-  materialCode: string;
-  materialName: string;
-  specCount: number;
-};
+export type RawMaterialPrepMaterialGrade = MaterialsListGrade;
 
-export const normalizeMaterialsList = (data: unknown): RawMaterialPrepMaterialOption[] => {
-  const list = Array.isArray(data)
-    ? data
-    : Array.isArray((data as { materials?: unknown })?.materials)
-      ? (data as { materials: unknown[] }).materials
-      : [];
+export type RawMaterialPrepMaterialOption = MaterialsListItem;
 
-  return list
-    .map((item: any) => ({
-      materialCode: String(item?.materialCode ?? "").trim(),
-      materialName: String(item?.materialName ?? item?.material ?? "").trim(),
-      specCount: Number(item?.specCount ?? 0),
-    }))
-    .filter((item) => item.materialCode.length > 0);
-};
+export const normalizeMaterialsList = normalizeMaterialsListResponse;
+
+export const findPrepMaterialByCode = (
+  materials: RawMaterialPrepMaterialOption[],
+  materialCode: string
+) =>
+  materials.find((m) => m.materialCode.toUpperCase() === String(materialCode ?? "").toUpperCase());
+
+export const getPrepMaterialGrades = (
+  materials: RawMaterialPrepMaterialOption[],
+  materialCode: string
+) => findPrepMaterialByCode(materials, materialCode)?.grades ?? [];
 
 export const RAW_MATERIAL_PREP_PROCESSES = [
   { value: "solid" as const, label: "Solid ingredients processing" },

@@ -18,7 +18,8 @@ type RawMaterialPrepFlowBarProps = {
   selectedProcesses: RawMaterialPrepSelectedProcesses;
   solidMaterialCode: string;
   liquidMaterialCode: string;
-  availableMaterials: RawMaterialPrepMaterialOption[];
+  availableSolidMaterials: RawMaterialPrepMaterialOption[];
+  availableLiquidMaterials: RawMaterialPrepMaterialOption[];
   loadingMaterials: boolean;
   availablePremixOptions: number[];
   onPremixChange: (premix: number | "") => void;
@@ -42,7 +43,8 @@ const RawMaterialPrepFlowBar = ({
   selectedProcesses,
   solidMaterialCode,
   liquidMaterialCode,
-  availableMaterials,
+  availableSolidMaterials,
+  availableLiquidMaterials,
   loadingMaterials,
   availablePremixOptions,
   onPremixChange,
@@ -59,14 +61,16 @@ const RawMaterialPrepFlowBar = ({
   const safeProcesses = { ...DEFAULT_SELECTED_PROCESSES, ...(selectedProcesses ?? {}) };
   const hasProcessSelected = safeProcesses.solid || safeProcesses.liquid;
   const showMaterialRow = premixSelected && hasProcessSelected;
-  const materials = Array.isArray(availableMaterials) ? availableMaterials : [];
+  const solidMaterials = Array.isArray(availableSolidMaterials) ? availableSolidMaterials : [];
+  const liquidMaterials = Array.isArray(availableLiquidMaterials) ? availableLiquidMaterials : [];
 
   const premixSelectOptions = availablePremixOptions.map((n) => ({
     value: String(n),
     label: getPremixLabel(n),
   }));
 
-  const materialSelectOptions = toMaterialSelectOptions(materials);
+  const solidMaterialSelectOptions = toMaterialSelectOptions(solidMaterials);
+  const liquidMaterialSelectOptions = toMaterialSelectOptions(liquidMaterials);
   const materialPlaceholder = loadingMaterials
     ? RM.LOADING_MATERIALS
     : RM.SELECT_RAW_MATERIAL_PLACEHOLDER;
@@ -129,7 +133,7 @@ const RawMaterialPrepFlowBar = ({
                     label={`Select Solid ${rawMaterialLabel}`}
                     value={solidMaterialCode}
                     placeholder={materialPlaceholder}
-                    options={materialSelectOptions}
+                    options={solidMaterialSelectOptions}
                     variant="material"
                     disabled={loadingMaterials}
                     width={360}
@@ -144,7 +148,7 @@ const RawMaterialPrepFlowBar = ({
                     label={`Select Liquid ${rawMaterialLabel}`}
                     value={liquidMaterialCode}
                     placeholder={materialPlaceholder}
-                    options={materialSelectOptions}
+                    options={liquidMaterialSelectOptions}
                     variant="material"
                     disabled={loadingMaterials}
                     width={360}

@@ -4,6 +4,7 @@ import { useAlertStore } from "../../../app/store/alertStore";
 import { useThemeStore } from "../../../app/store/themeStore";
 import getSourcingTheme from "../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { operationsController } from "../../../controllers/user/operationsController";
+import type { MaterialsListItem } from "../../../data/models/user/MaterialsListModel";
 import { MaterialSpecificationItemModel } from "../../../data/models/user/MaterialSpecificationModel";
 import type {
   MaterialBlock,
@@ -31,11 +32,7 @@ import {
 export type SpecificationRow = SpecRow;
 export type SpecificationBlock = MaterialBlock;
 
-type MaterialOption = {
-  materialCode: string;
-  materialName: string;
-  specCount: number;
-};
+type MaterialOption = Pick<MaterialsListItem, "materialCode" | "materialName" | "specCount">;
 
 type UseRawMaterialSpecificationFormParams = {
   initialBlocks?: SpecificationBlock[];
@@ -207,12 +204,18 @@ export const useRawMaterialSpecificationForm = ({
       setLoadingMaterials(true);
 
       try {
-        const response = await operationsController.fetchMaterialsList();
+        const response = await operationsController.fetchAllMaterialsList();
 
         if (!isActive) return;
 
         if (response?.success && response?.data) {
-          setAvailableMaterials(response.data);
+          setAvailableMaterials(
+            response.data.map(({ materialCode, materialName, specCount }) => ({
+              materialCode,
+              materialName,
+              specCount,
+            }))
+          );
           return;
         }
 

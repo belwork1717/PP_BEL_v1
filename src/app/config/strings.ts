@@ -800,6 +800,8 @@ export const STRINGS = {
       PROCESS_PLACEHOLDER: "Choose process",
       SELECT_RAW_MATERIAL_LABEL: "Select Raw Material",
       SELECT_RAW_MATERIAL_PLACEHOLDER: "— Choose raw material —",
+      SELECT_GRADE_LABEL: "Select Grade",
+      SELECT_GRADE_PLACEHOLDER: "— Choose grade —",
       LOADING_MATERIALS: "Loading materials…",
       SELECT_PREMIX_AND_PROCESS: "Select a premix and process to load the form",
       NO_PROCESS_SELECTED_TITLE: "No process selected",

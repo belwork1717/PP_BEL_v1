@@ -7,7 +7,7 @@ import LiquidPreparation from "./LiquidPreparation";
 import RawMaterialPrepFlowBar from "./RawMaterialPrepFlowBar";
 import { STRINGS } from "../../../../../app/config/strings";
 import { icons } from "../../../../../app/theme/icons";
-import { DEFAULT_SELECTED_PROCESSES } from "../../../../../hooks/user/manufacturing/rawMaterialPrepFlowConfig";
+import { DEFAULT_SELECTED_PROCESSES, materialRequiresGradeSelection } from "../../../../../hooks/user/manufacturing/rawMaterialPrepFlowConfig";
 
 const RM = STRINGS.MANUFACTURING.RAW_MATERIAL_PREP;
 const { info: InfoOutlinedIcon } = icons.user.manufacturing.rawMaterial.builderPage;
@@ -19,6 +19,7 @@ const RawMaterialBuilderForm = ({
   selectedPremix,
   selectedProcesses,
   solidMaterialCode,
+  solidGradeCode,
   liquidMaterialCode,
   availableSolidMaterials,
   availableLiquidMaterials,
@@ -27,6 +28,7 @@ const RawMaterialBuilderForm = ({
   onPremixChange,
   onProcessToggle,
   onSolidMaterialChange,
+  onSolidGradeChange,
   onLiquidMaterialChange,
   onAddPremixSelection,
   addedPremixSelections,
@@ -50,10 +52,16 @@ const RawMaterialBuilderForm = ({
   const isResubmission = Boolean(isEditMode);
   const processes = { ...DEFAULT_SELECTED_PROCESSES, ...(selectedProcesses ?? {}) };
 
+  const solidNeedsGrade =
+    processes.solid &&
+    Boolean(solidMaterialCode) &&
+    materialRequiresGradeSelection(availableSolidMaterials ?? [], solidMaterialCode);
+
   const canAddPremixSelection =
     selectedPremix !== "" &&
     (processes.solid || processes.liquid) &&
     (!processes.solid || Boolean(solidMaterialCode)) &&
+    (!solidNeedsGrade || Boolean(solidGradeCode)) &&
     (!processes.liquid || Boolean(liquidMaterialCode));
   const premixCards = Array.isArray(addedPremixSelections) ? addedPremixSelections : [];
   const [activePremixIndex, setActivePremixIndex] = useState(0);
@@ -77,6 +85,7 @@ const RawMaterialBuilderForm = ({
         selectedPremix={selectedPremix}
         selectedProcesses={selectedProcesses}
         solidMaterialCode={solidMaterialCode}
+        solidGradeCode={solidGradeCode}
         liquidMaterialCode={liquidMaterialCode}
         availableSolidMaterials={availableSolidMaterials}
         availableLiquidMaterials={availableLiquidMaterials}
@@ -85,6 +94,7 @@ const RawMaterialBuilderForm = ({
         onPremixChange={onPremixChange}
         onProcessToggle={onProcessToggle}
         onSolidMaterialChange={onSolidMaterialChange}
+        onSolidGradeChange={onSolidGradeChange}
         onLiquidMaterialChange={onLiquidMaterialChange}
         onAddPremixSelection={onAddPremixSelection}
         canAddPremixSelection={canAddPremixSelection}
@@ -142,6 +152,7 @@ const RawMaterialBuilderForm = ({
               {activePremixEntry.selectedProcesses?.solid && (
                 <Typography sx={{ fontSize: "0.78rem", color: theme.palette.text }}>
                   Solid: {activePremixEntry.solidMaterialCode || "Not selected"}
+                  {activePremixEntry.solidGradeCode ? ` (${activePremixEntry.solidGradeCode})` : ""}
                 </Typography>
               )}
               {activePremixEntry.selectedProcesses?.liquid && (

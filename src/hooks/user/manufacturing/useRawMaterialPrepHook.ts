@@ -22,6 +22,8 @@ import { createLinearPreparationData } from "./linearPreparationConfig";
 import {
   DEFAULT_SELECTED_PROCESSES,
   PREMIX_OPTIONS,
+  getPrepMaterialGrades,
+  materialRequiresGradeSelection,
   normalizeMaterialsList,
   type RawMaterialPrepMaterialOption,
   type RawMaterialPrepProcessKey,
@@ -66,6 +68,7 @@ type LinearState = ReturnType<typeof createLinearPreparationData>;
 type PremixSession = {
   selectedProcesses: RawMaterialPrepSelectedProcesses;
   solidMaterialCode: string;
+  solidGradeCode: string;
   liquidMaterialCode: string;
   solidInstances: SolidProcessInstance[];
   liquidPartA: LiquidPartAState;
@@ -76,6 +79,7 @@ type AddedPremixSelection = {
   premix: number;
   selectedProcesses: RawMaterialPrepSelectedProcesses;
   solidMaterialCode: string;
+  solidGradeCode: string;
   liquidMaterialCode: string;
 };
 
@@ -101,6 +105,7 @@ const DEFAULT_LINEAR = createLinearPreparationData();
 const createEmptyPremixSession = (): PremixSession => ({
   selectedProcesses: { ...DEFAULT_SELECTED_PROCESSES },
   solidMaterialCode: "",
+  solidGradeCode: "",
   liquidMaterialCode: "",
   solidInstances: [],
   liquidPartA: { ...DEFAULT_LIQUID_PART_A },
@@ -111,6 +116,7 @@ const createDefaultFormState = () => ({
   selectedPremix: "" as number | "",
   selectedProcesses: { ...DEFAULT_SELECTED_PROCESSES },
   solidMaterialCode: "",
+  solidGradeCode: "",
   liquidMaterialCode: "",
   solidInstances: [] as SolidProcessInstance[],
   liquidPartA: { ...DEFAULT_LIQUID_PART_A },
@@ -129,6 +135,7 @@ const normalizePremixSession = (session?: Partial<PremixSession> | null): Premix
   return {
     selectedProcesses,
     solidMaterialCode: session?.solidMaterialCode ?? "",
+    solidGradeCode: session?.solidGradeCode ?? "",
     liquidMaterialCode: session?.liquidMaterialCode ?? "",
     solidInstances: session?.solidInstances ?? [],
     liquidPartA: session?.liquidPartA ?? { ...DEFAULT_LIQUID_PART_A },
@@ -179,6 +186,7 @@ export const useRawMaterialPrepHook = () => {
     () => ({ ...DEFAULT_SELECTED_PROCESSES })
   );
   const [solidMaterialCode, setSolidMaterialCode] = useState("");
+  const [solidGradeCode, setSolidGradeCode] = useState("");
   const [liquidMaterialCode, setLiquidMaterialCode] = useState("");
   const [availableSolidMaterials, setAvailableSolidMaterials] = useState<RawMaterialPrepMaterialOption[]>([]);
   const [availableLiquidMaterials, setAvailableLiquidMaterials] = useState<RawMaterialPrepMaterialOption[]>([]);
@@ -345,6 +353,7 @@ export const useRawMaterialPrepHook = () => {
     (): PremixSession => ({
       selectedProcesses: { ...selectedProcesses },
       solidMaterialCode,
+      solidGradeCode,
       liquidMaterialCode,
       solidInstances,
       liquidPartA,
@@ -353,6 +362,7 @@ export const useRawMaterialPrepHook = () => {
     [
       selectedProcesses,
       solidMaterialCode,
+      solidGradeCode,
       liquidMaterialCode,
       solidInstances,
       liquidPartA,
@@ -364,6 +374,7 @@ export const useRawMaterialPrepHook = () => {
     const normalized = normalizePremixSession(session);
     setSelectedProcesses(normalized.selectedProcesses);
     setSolidMaterialCode(normalized.solidMaterialCode);
+    setSolidGradeCode(normalized.solidGradeCode);
     setLiquidMaterialCode(normalized.liquidMaterialCode);
     setSolidInstances(normalized.solidInstances);
     setLiquidPartA(normalized.liquidPartA);
@@ -425,6 +436,7 @@ export const useRawMaterialPrepHook = () => {
       selectedPremix,
       selectedProcesses,
       solidMaterialCode,
+      solidGradeCode,
       liquidMaterialCode,
       solidInstances,
       liquidPartA,
@@ -449,6 +461,7 @@ export const useRawMaterialPrepHook = () => {
     setSelectedPremix(defaults.selectedPremix);
     setSelectedProcesses(defaults.selectedProcesses);
     setSolidMaterialCode(defaults.solidMaterialCode);
+    setSolidGradeCode(defaults.solidGradeCode);
     setLiquidMaterialCode(defaults.liquidMaterialCode);
     setAvailableSolidMaterials([]);
     setAvailableLiquidMaterials([]);
@@ -463,6 +476,7 @@ export const useRawMaterialPrepHook = () => {
         selectedPremix: defaults.selectedPremix,
         selectedProcesses: defaults.selectedProcesses,
         solidMaterialCode: defaults.solidMaterialCode,
+        solidGradeCode: defaults.solidGradeCode,
         liquidMaterialCode: defaults.liquidMaterialCode,
         solidInstances: defaults.solidInstances,
         liquidPartA: defaults.liquidPartA,
@@ -634,6 +648,7 @@ export const useRawMaterialPrepHook = () => {
       if (!checked) {
         if (process === "solid") {
           setSolidMaterialCode("");
+          setSolidGradeCode("");
           setSolidInstances([]);
           setAvailableSolidMaterials([]);
         } else {
@@ -649,6 +664,11 @@ export const useRawMaterialPrepHook = () => {
 
   const handleSolidMaterialChange = useCallback((materialCode: string) => {
     setSolidMaterialCode(materialCode);
+    setSolidGradeCode("");
+  }, []);
+
+  const handleSolidGradeChange = useCallback((gradeCode: string) => {
+    setSolidGradeCode(gradeCode);
   }, []);
 
   const handleLiquidMaterialChange = useCallback((materialCode: string) => {
@@ -662,6 +682,13 @@ export const useRawMaterialPrepHook = () => {
     const hasLiquid = Boolean(selectedProcesses.liquid);
     if (!hasSolid && !hasLiquid) return;
     if (hasSolid && !solidMaterialCode) return;
+    if (
+      hasSolid &&
+      materialRequiresGradeSelection(availableSolidMaterials, solidMaterialCode) &&
+      !solidGradeCode
+    ) {
+      return;
+    }
     if (hasLiquid && !liquidMaterialCode) return;
 
     const nextEntry: AddedPremixSelection = {
@@ -671,6 +698,7 @@ export const useRawMaterialPrepHook = () => {
         liquid: hasLiquid,
       },
       solidMaterialCode,
+      solidGradeCode: hasSolid ? solidGradeCode : "",
       liquidMaterialCode,
     };
     const nextSession: PremixSession = {
@@ -679,6 +707,7 @@ export const useRawMaterialPrepHook = () => {
         liquid: hasLiquid,
       },
       solidMaterialCode,
+      solidGradeCode: hasSolid ? solidGradeCode : "",
       liquidMaterialCode,
       solidInstances: [],
       liquidPartA: { ...DEFAULT_LIQUID_PART_A },
@@ -712,11 +741,13 @@ export const useRawMaterialPrepHook = () => {
     selectedPremix,
     selectedProcesses,
     solidMaterialCode,
+    solidGradeCode,
     liquidMaterialCode,
     activeFormBatchKey,
     activeBatchId,
     markPremixComplete,
     applyPremixSession,
+    availableSolidMaterials,
   ]);
 
   const handlePremixSolidBlocksChange = useCallback(
@@ -849,7 +880,7 @@ export const useRawMaterialPrepHook = () => {
       const nextFormId = response.data?.formId ?? activeBatch.formId ?? null;
       setActiveBatch((prev) => (prev ? { ...prev, formId: nextFormId } : prev));
       setInitialSnapshot(formSnapshot);
-      if (activeBatchId && selectedPremix !== "") {
+      if (activeBatchId) {
         persistCurrentPremixSession(activeBatchId, selectedPremix);
         markPremixComplete(activeBatchId, selectedPremix);
       }
@@ -927,6 +958,7 @@ export const useRawMaterialPrepHook = () => {
     selectedPremix,
     selectedProcesses: safeSelectedProcesses,
     solidMaterialCode,
+    solidGradeCode,
     liquidMaterialCode,
     availableSolidMaterials: Array.isArray(availableSolidMaterials) ? availableSolidMaterials : [],
     availableLiquidMaterials: Array.isArray(availableLiquidMaterials) ? availableLiquidMaterials : [],
@@ -941,6 +973,7 @@ export const useRawMaterialPrepHook = () => {
     handlePremixChange,
     handleProcessToggle,
     handleSolidMaterialChange,
+    handleSolidGradeChange,
     handleLiquidMaterialChange,
     handleAddPremixSelection,
     handlePremixSolidBlocksChange,

@@ -34,6 +34,11 @@ export const getPrepMaterialGrades = (
   materialCode: string
 ) => findPrepMaterialByCode(materials, materialCode)?.grades ?? [];
 
+export const materialRequiresGradeSelection = (
+  materials: RawMaterialPrepMaterialOption[],
+  materialCode: string
+) => getPrepMaterialGrades(materials, materialCode).length > 0;
+
 export const RAW_MATERIAL_PREP_PROCESSES = [
   { value: "solid" as const, label: "Solid ingredients processing" },
   { value: "liquid" as const, label: "Liquid ingredients processing" },

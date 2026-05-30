@@ -51,6 +51,7 @@ const RawMaterialPreparationPage = () => {
     selectedPremix,
     selectedProcesses,
     solidMaterialCode,
+    solidGradeCode,
     liquidMaterialCode,
     availableSolidMaterials,
     availableLiquidMaterials,
@@ -59,6 +60,7 @@ const RawMaterialPreparationPage = () => {
     handlePremixChange,
     handleProcessToggle,
     handleSolidMaterialChange,
+    handleSolidGradeChange,
     handleLiquidMaterialChange,
     handleAddPremixSelection,
     addedPremixSelections,
@@ -115,6 +117,7 @@ const RawMaterialPreparationPage = () => {
             selectedPremix={selectedPremix}
             selectedProcesses={selectedProcesses}
             solidMaterialCode={solidMaterialCode}
+            solidGradeCode={solidGradeCode}
             liquidMaterialCode={liquidMaterialCode}
             availableSolidMaterials={availableSolidMaterials}
             availableLiquidMaterials={availableLiquidMaterials}
@@ -123,6 +126,7 @@ const RawMaterialPreparationPage = () => {
             onPremixChange={handlePremixChange}
             onProcessToggle={handleProcessToggle}
             onSolidMaterialChange={handleSolidMaterialChange}
+            onSolidGradeChange={handleSolidGradeChange}
             onLiquidMaterialChange={handleLiquidMaterialChange}
             onAddPremixSelection={handleAddPremixSelection}
             addedPremixSelections={addedPremixSelections}

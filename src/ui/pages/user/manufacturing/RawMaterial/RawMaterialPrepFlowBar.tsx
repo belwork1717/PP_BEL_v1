@@ -4,6 +4,9 @@ import {
   DEFAULT_SELECTED_PROCESSES,
   RAW_MATERIAL_PREP_PROCESSES,
   getPremixLabel,
+  getPrepMaterialGrades,
+  materialRequiresGradeSelection,
+  type RawMaterialPrepMaterialGrade,
   type RawMaterialPrepMaterialOption,
   type RawMaterialPrepProcessKey,
   type RawMaterialPrepSelectedProcesses,
@@ -17,6 +20,7 @@ type RawMaterialPrepFlowBarProps = {
   selectedPremix: number | "";
   selectedProcesses: RawMaterialPrepSelectedProcesses;
   solidMaterialCode: string;
+  solidGradeCode: string;
   liquidMaterialCode: string;
   availableSolidMaterials: RawMaterialPrepMaterialOption[];
   availableLiquidMaterials: RawMaterialPrepMaterialOption[];
@@ -25,6 +29,7 @@ type RawMaterialPrepFlowBarProps = {
   onPremixChange: (premix: number | "") => void;
   onProcessToggle: (process: RawMaterialPrepProcessKey, checked: boolean) => void;
   onSolidMaterialChange: (materialCode: string) => void;
+  onSolidGradeChange: (gradeCode: string) => void;
   onLiquidMaterialChange: (materialCode: string) => void;
   onAddPremixSelection: () => void;
   canAddPremixSelection: boolean;
@@ -38,10 +43,17 @@ const toMaterialSelectOptions = (materials: RawMaterialPrepMaterialOption[]) =>
     meta: `(${m.specCount ?? 0} ${SF.SPEC_COUNT_SUFFIX})`,
   }));
 
+const toGradeSelectOptions = (grades: RawMaterialPrepMaterialGrade[]) =>
+  grades.map((g) => ({
+    value: g.gradeCode,
+    label: g.gradeName || g.gradeCode,
+  }));
+
 const RawMaterialPrepFlowBar = ({
   selectedPremix,
   selectedProcesses,
   solidMaterialCode,
+  solidGradeCode,
   liquidMaterialCode,
   availableSolidMaterials,
   availableLiquidMaterials,
@@ -50,6 +62,7 @@ const RawMaterialPrepFlowBar = ({
   onPremixChange,
   onProcessToggle,
   onSolidMaterialChange,
+  onSolidGradeChange,
   onLiquidMaterialChange,
   onAddPremixSelection,
   canAddPremixSelection,
@@ -71,6 +84,13 @@ const RawMaterialPrepFlowBar = ({
 
   const solidMaterialSelectOptions = toMaterialSelectOptions(solidMaterials);
   const liquidMaterialSelectOptions = toMaterialSelectOptions(liquidMaterials);
+  const showSolidGradeSelect =
+    safeProcesses.solid &&
+    Boolean(solidMaterialCode) &&
+    materialRequiresGradeSelection(solidMaterials, solidMaterialCode);
+  const solidGradeSelectOptions = showSolidGradeSelect
+    ? toGradeSelectOptions(getPrepMaterialGrades(solidMaterials, solidMaterialCode))
+    : [];
   const materialPlaceholder = loadingMaterials
     ? RM.LOADING_MATERIALS
     : RM.SELECT_RAW_MATERIAL_PLACEHOLDER;
@@ -79,7 +99,6 @@ const RawMaterialPrepFlowBar = ({
   return (
     <Box sx={flowBarTheme.container}>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {/* Row 1: Premix + process — labels aligned at top */}
         <Box sx={flowBarTheme.topRow}>
           <RawMaterialPrepSelect
             label={RM.PREMIX_LABEL}
@@ -116,7 +135,6 @@ const RawMaterialPrepFlowBar = ({
           </Box>
         </Box>
 
-        {/* Row 2: Raw material — procurement-style */}
         {showMaterialRow && (
           <Box sx={flowBarTheme.materialSelectorBox}>
             <Box
@@ -139,6 +157,21 @@ const RawMaterialPrepFlowBar = ({
                     width={360}
                     theme={theme}
                     onChange={onSolidMaterialChange}
+                  />
+                </Box>
+              )}
+              {showSolidGradeSelect && (
+                <Box sx={{ flex: "0 0 auto" }}>
+                  <RawMaterialPrepSelect
+                    label={RM.SELECT_GRADE_LABEL}
+                    value={solidGradeCode}
+                    placeholder={RM.SELECT_GRADE_PLACEHOLDER}
+                    options={solidGradeSelectOptions}
+                    variant="premix"
+                    disabled={loadingMaterials}
+                    width={280}
+                    theme={theme}
+                    onChange={onSolidGradeChange}
                   />
                 </Box>
               )}

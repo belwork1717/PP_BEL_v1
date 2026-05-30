@@ -11,24 +11,26 @@ import { ManufacturingBatch, WorkflowView } from "./useManufacturingWorkflow";
 import { useSubdepartmentBatches } from "../useSubdepartmentBatches";
 import rawMaterialPreparationController from "../../../controllers/user/manufacturing/rawMaterialPreparationController";
 import {
-  mapLiquidFromDetails,
-  mapLinearFromDetails,
-  mapPreparationPayload,
-  mapSolidInstancesFromDetails,
-  getSelectedTypesFromMaterialTypes,
+  createEmptyPremixSchemaSession,
+  mapPreparationDetailsFromApi,
+  mapPreparationDetailsPayload,
+  premixSessionHasData,
+  type RawMaterialPrepPremixSession,
+  type RawMaterialPrepPremixSelection,
 } from "../../../data/models/user/RawMaterialPreparationModel";
-import { PART_A_INITIAL } from "./liquidPreparationConfig";
-import { createLinearPreparationData } from "./linearPreparationConfig";
+import type { MaterialsListItem } from "../../../data/models/user/MaterialsListModel";
 import {
   DEFAULT_SELECTED_PROCESSES,
   PREMIX_OPTIONS,
   getPrepMaterialGrades,
   materialRequiresGradeSelection,
+  findPrepMaterialByCode,
   normalizeMaterialsList,
   type RawMaterialPrepMaterialOption,
   type RawMaterialPrepProcessKey,
   type RawMaterialPrepSelectedProcesses,
 } from "./rawMaterialPrepFlowConfig";
+import { findGradeInMaterial } from "../../../schemaManagement/adapters/rawMaterialPreparation.adapter";
 
 const RM_STATUS = MANUFACTURING_STATUS;
 
@@ -47,47 +49,8 @@ export interface MaterialTypes {
   linear: boolean;
 }
 
-type LiquidPartAState = {
-  jacketTemp: string;
-  rpm: string;
-  time: string;
-};
-
-type LiquidPartBRow = {
-  id: number;
-  material: string;
-  percentage: string;
-  weightKg: string;
-  lotNo: string;
-  dateTime: string;
-  remarks: string;
-};
-
-type LinearState = ReturnType<typeof createLinearPreparationData>;
-
-type PremixSession = {
-  selectedProcesses: RawMaterialPrepSelectedProcesses;
-  solidMaterialCode: string;
-  solidGradeCode: string;
-  liquidMaterialCode: string;
-  solidInstances: SolidProcessInstance[];
-  liquidPartA: LiquidPartAState;
-  liquidRows: LiquidPartBRow[];
-};
-
-type AddedPremixSelection = {
-  premix: number;
-  selectedProcesses: RawMaterialPrepSelectedProcesses;
-  solidMaterialCode: string;
-  solidGradeCode: string;
-  liquidMaterialCode: string;
-};
-
-type SolidProcessInstance = {
-  instanceId: number;
-  processKey: string;
-  data: any;
-};
+type AddedPremixSelection = RawMaterialPrepPremixSelection;
+type PremixSession = RawMaterialPrepPremixSession;
 
 export type RawMaterialPrepBatch = ManufacturingBatch & {
   rmStatus?: string;
@@ -95,22 +58,7 @@ export type RawMaterialPrepBatch = ManufacturingBatch & {
   formId?: string | null;
 };
 
-const DEFAULT_LIQUID_PART_A: LiquidPartAState = {
-  jacketTemp: String(PART_A_INITIAL.jacketTemp ?? ""),
-  rpm: String(PART_A_INITIAL.rpm ?? ""),
-  time: String(PART_A_INITIAL.time ?? ""),
-};
-const DEFAULT_LINEAR = createLinearPreparationData();
-
-const createEmptyPremixSession = (): PremixSession => ({
-  selectedProcesses: { ...DEFAULT_SELECTED_PROCESSES },
-  solidMaterialCode: "",
-  solidGradeCode: "",
-  liquidMaterialCode: "",
-  solidInstances: [],
-  liquidPartA: { ...DEFAULT_LIQUID_PART_A },
-  liquidRows: [],
-});
+const createEmptyPremixSession = (): PremixSession => createEmptyPremixSchemaSession();
 
 const createDefaultFormState = () => ({
   selectedPremix: "" as number | "",
@@ -118,45 +66,25 @@ const createDefaultFormState = () => ({
   solidMaterialCode: "",
   solidGradeCode: "",
   liquidMaterialCode: "",
-  solidInstances: [] as SolidProcessInstance[],
-  liquidPartA: { ...DEFAULT_LIQUID_PART_A },
-  liquidRows: [] as LiquidPartBRow[],
-  linearData: createLinearPreparationData(),
 });
 
 const normalizePremixSession = (session?: Partial<PremixSession> | null): PremixSession => {
-  const legacyProcess = (session as { process?: string })?.process;
-  const rawProcesses = session?.selectedProcesses;
-  const selectedProcesses: RawMaterialPrepSelectedProcesses = {
-    solid: Boolean(rawProcesses?.solid ?? legacyProcess === "solid"),
-    liquid: Boolean(rawProcesses?.liquid ?? legacyProcess === "liquid"),
-  };
+  const base = createEmptyPremixSchemaSession();
+  if (!session) return base;
 
   return {
-    selectedProcesses,
-    solidMaterialCode: session?.solidMaterialCode ?? "",
-    solidGradeCode: session?.solidGradeCode ?? "",
-    liquidMaterialCode: session?.liquidMaterialCode ?? "",
-    solidInstances: session?.solidInstances ?? [],
-    liquidPartA: session?.liquidPartA ?? { ...DEFAULT_LIQUID_PART_A },
-    liquidRows: session?.liquidRows ?? [],
+    ...base,
+    ...session,
+    selectedProcesses: {
+      solid: Boolean(session.selectedProcesses?.solid),
+      liquid: Boolean(session.selectedProcesses?.liquid),
+    },
+    solid: { ...base.solid, ...(session.solid ?? {}) },
+    liquid: { ...base.liquid, ...(session.liquid ?? {}) },
   };
 };
 
-const isSessionFilled = (session: PremixSession) => {
-  const normalized = normalizePremixSession(session);
-  const solidFilled =
-    normalized.selectedProcesses.solid &&
-    normalized.solidInstances.some((instance) => Object.keys(instance?.data ?? {}).length > 0);
-  const liquidFilled =
-    normalized.selectedProcesses.liquid &&
-    (Object.values(normalized.liquidPartA).some((v) => String(v).trim().length > 0) ||
-      normalized.liquidRows.some((row) =>
-        [row.material, row.percentage, row.weightKg, row.lotNo, row.dateTime, row.remarks]
-          .some((v) => String(v).trim().length > 0)
-      ));
-  return solidFilled || liquidFilled;
-};
+const isSessionFilled = (session: PremixSession) => premixSessionHasData(normalizePremixSession(session));
 
 const parseStatus = (status: string | undefined) => String(status ?? "").toLowerCase();
 
@@ -199,10 +127,6 @@ export const useRawMaterialPrepHook = () => {
     Record<string, AddedPremixSelection[]>
   >({});
 
-  const [solidInstances, setSolidInstances] = useState<SolidProcessInstance[]>([]);
-  const [liquidPartA, setLiquidPartA] = useState<LiquidPartAState>(DEFAULT_LIQUID_PART_A);
-  const [liquidRows, setLiquidRows] = useState<LiquidPartBRow[]>([]);
-  const [linearData, setLinearData] = useState<LinearState>(DEFAULT_LINEAR);
   const [initialSnapshot, setInitialSnapshot] = useState("{}");
 
   const safeSelectedProcesses = useMemo(
@@ -221,8 +145,6 @@ export const useRawMaterialPrepHook = () => {
     }),
     [safeSelectedProcesses]
   );
-
-  const hasProcessSelected = safeSelectedProcesses.solid || safeSelectedProcesses.liquid;
 
   const loadMaterialsByType = useCallback(
     async (materialType: "SOLID" | "LIQUID", options?: { silent?: boolean }) => {
@@ -255,8 +177,29 @@ export const useRawMaterialPrepHook = () => {
     }
   }, []);
 
+  const activeBatchId = activeBatch?.batchId ?? "";
+  const activeFormBatchKey = activeBatchId || "__form__";
+  const activeAddedPremixSelections = useMemo(
+    () => addedPremixSelectionsByBatch[activeFormBatchKey] ?? [],
+    [addedPremixSelectionsByBatch, activeFormBatchKey]
+  );
+
+  const needsSolidMaterialsList = useMemo(
+    () =>
+      safeSelectedProcesses.solid ||
+      activeAddedPremixSelections.some((entry) => entry.selectedProcesses.solid),
+    [safeSelectedProcesses.solid, activeAddedPremixSelections]
+  );
+
+  const needsLiquidMaterialsList = useMemo(
+    () =>
+      safeSelectedProcesses.liquid ||
+      activeAddedPremixSelections.some((entry) => entry.selectedProcesses.liquid),
+    [safeSelectedProcesses.liquid, activeAddedPremixSelections]
+  );
+
   useEffect(() => {
-    if (view !== "form" || !safeSelectedProcesses.solid) {
+    if (view !== "form" || !needsSolidMaterialsList) {
       setAvailableSolidMaterials([]);
       return;
     }
@@ -286,10 +229,10 @@ export const useRawMaterialPrepHook = () => {
     return () => {
       cancelled = true;
     };
-  }, [view, safeSelectedProcesses.solid, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
+  }, [view, needsSolidMaterialsList, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
 
   useEffect(() => {
-    if (view !== "form" || !safeSelectedProcesses.liquid) {
+    if (view !== "form" || !needsLiquidMaterialsList) {
       setAvailableLiquidMaterials([]);
       return;
     }
@@ -319,7 +262,7 @@ export const useRawMaterialPrepHook = () => {
     return () => {
       cancelled = true;
     };
-  }, [view, safeSelectedProcesses.liquid, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
+  }, [view, needsLiquidMaterialsList, loadMaterialsByType, showAlert, beginMaterialsLoad, endMaterialsLoad]);
 
   const materialTypesArray = useMemo(() => {
     const types: Array<"solid" | "liquid"> = [];
@@ -327,9 +270,6 @@ export const useRawMaterialPrepHook = () => {
     if (selectedTypes.liquid) types.push("liquid");
     return types;
   }, [selectedTypes]);
-
-  const activeBatchId = activeBatch?.batchId ?? "";
-  const activeFormBatchKey = activeBatchId || "__form__";
 
   const completedPremixes = useMemo(
     () => completedPremixesByBatch[activeBatchId] ?? [],
@@ -349,36 +289,12 @@ export const useRawMaterialPrepHook = () => {
     [addedPremixSelectionsByBatch, activeFormBatchKey]
   );
 
-  const getCurrentPremixSession = useCallback(
-    (): PremixSession => ({
-      selectedProcesses: { ...selectedProcesses },
-      solidMaterialCode,
-      solidGradeCode,
-      liquidMaterialCode,
-      solidInstances,
-      liquidPartA,
-      liquidRows,
-    }),
-    [
-      selectedProcesses,
-      solidMaterialCode,
-      solidGradeCode,
-      liquidMaterialCode,
-      solidInstances,
-      liquidPartA,
-      liquidRows,
-    ]
-  );
-
   const applyPremixSession = useCallback((session?: Partial<PremixSession> | null) => {
     const normalized = normalizePremixSession(session);
     setSelectedProcesses(normalized.selectedProcesses);
     setSolidMaterialCode(normalized.solidMaterialCode);
     setSolidGradeCode(normalized.solidGradeCode);
     setLiquidMaterialCode(normalized.liquidMaterialCode);
-    setSolidInstances(normalized.solidInstances);
-    setLiquidPartA(normalized.liquidPartA);
-    setLiquidRows(normalized.liquidRows);
   }, []);
 
   const markPremixComplete = useCallback(
@@ -393,55 +309,43 @@ export const useRawMaterialPrepHook = () => {
     []
   );
 
-  const persistCurrentPremixSession = useCallback(
-    (batchId: string, premix: number | "") => {
-      if (!batchId || premix === "") return;
-      const session = getCurrentPremixSession();
-      setPremixSessionsByBatch((prev) => ({
-        ...prev,
-        [batchId]: { ...(prev[batchId] ?? {}), [premix]: session },
-      }));
-      if (isSessionFilled(session)) {
-        markPremixComplete(batchId, premix);
-      }
-    },
-    [getCurrentPremixSession, markPremixComplete]
-  );
-
-  const solidHasData = useMemo(() => {
-    return solidInstances.some((instance) => Object.keys(instance?.data ?? {}).length > 0);
-  }, [solidInstances]);
-
-  const liquidHasData = useMemo(() => {
-    const partAHasData = Object.values(liquidPartA).some((v) => String(v).trim().length > 0);
-    const rowsHaveData = liquidRows.some((row) =>
-      [row.material, row.percentage, row.weightKg, row.lotNo, row.dateTime, row.remarks]
-        .some((v) => String(v).trim().length > 0)
-    );
-    return partAHasData || rowsHaveData;
-  }, [liquidPartA, liquidRows]);
-
   const formSnapshot = useMemo(
     () =>
       JSON.stringify({
-        selectedPremix,
-        selectedProcesses,
-        solidMaterialCode,
-        liquidMaterialCode,
-        solidInstances,
-        liquidPartA,
-        liquidRows,
+        addedPremixSelections,
+        premixSessions,
       }),
-    [
-      selectedPremix,
-      selectedProcesses,
-      solidMaterialCode,
-      solidGradeCode,
-      liquidMaterialCode,
-      solidInstances,
-      liquidPartA,
-      liquidRows,
-    ]
+    [addedPremixSelections, premixSessions]
+  );
+
+  const premixCardsHaveData = useMemo(
+    () =>
+      addedPremixSelections.some((entry) => {
+        const session = premixSessions[entry.premix];
+        return session ? isSessionFilled(session) : false;
+      }),
+    [addedPremixSelections, premixSessions]
+  );
+
+  const allPremixSchemasReady = useMemo(
+    () =>
+      addedPremixSelections.length > 0 &&
+      addedPremixSelections.every((entry) => {
+        const session = premixSessions[entry.premix];
+        if (!session) return false;
+        if (entry.selectedProcesses.solid) {
+          if (session.solid.schemaLoading || session.solid.schemaError || !session.solid.schema) {
+            return false;
+          }
+        }
+        if (entry.selectedProcesses.liquid) {
+          if (session.liquid.schemaLoading || session.liquid.schemaError || !session.liquid.schema) {
+            return false;
+          }
+        }
+        return true;
+      }),
+    [addedPremixSelections, premixSessions]
   );
 
   const isFormDirty = useMemo(
@@ -467,20 +371,12 @@ export const useRawMaterialPrepHook = () => {
     setAvailableLiquidMaterials([]);
     materialsLoadCountRef.current = 0;
     setLoadingMaterials(false);
-    setSolidInstances(defaults.solidInstances);
-    setLiquidPartA(defaults.liquidPartA);
-    setLiquidRows(defaults.liquidRows);
-    setLinearData(defaults.linearData);
+    setAddedPremixSelectionsByBatch({});
+    setPremixSessionsByBatch({});
     setInitialSnapshot(
       JSON.stringify({
-        selectedPremix: defaults.selectedPremix,
-        selectedProcesses: defaults.selectedProcesses,
-        solidMaterialCode: defaults.solidMaterialCode,
-        solidGradeCode: defaults.solidGradeCode,
-        liquidMaterialCode: defaults.liquidMaterialCode,
-        solidInstances: defaults.solidInstances,
-        liquidPartA: defaults.liquidPartA,
-        liquidRows: defaults.liquidRows,
+        addedPremixSelections: [],
+        premixSessions: {},
       })
     );
   }, []);
@@ -499,14 +395,8 @@ export const useRawMaterialPrepHook = () => {
       status === parseStatus(RM_STATUS.REJECTED);
 
     let nextBatch = batch;
-    let nextSelectedProcesses = { ...DEFAULT_SELECTED_PROCESSES };
-    let nextSolidMaterialCode = "";
-    let nextLiquidMaterialCode = "";
-    let nextPremix: number | "" = "";
-    let nextSolidInstances: SolidProcessInstance[] = [];
-    let nextLiquidPartA = { ...DEFAULT_LIQUID_PART_A };
-    let nextLiquidRows: LiquidPartBRow[] = [];
-    let nextLinearData = createLinearPreparationData();
+    let nextAddedPremixSelections: AddedPremixSelection[] = [];
+    let nextPremixSessions: Record<number, PremixSession> = {};
 
     if (shouldFetchDetails) {
       if (!subDepartmentId) {
@@ -540,41 +430,32 @@ export const useRawMaterialPrepHook = () => {
         ...batch,
         formId: details.formId || batch.formId,
       };
-      const loadedTypes = getSelectedTypesFromMaterialTypes(details.materialTypes as any);
-      nextSelectedProcesses = {
-        solid: loadedTypes.solid,
-        liquid: loadedTypes.liquid,
-      };
-      nextPremix = 1;
-      nextSolidInstances = mapSolidInstancesFromDetails(details as any);
-
-      const liquidMapped = mapLiquidFromDetails(details as any);
-      nextLiquidPartA = liquidMapped.partA;
-      nextLiquidRows = liquidMapped.rows;
-
-      nextLinearData = mapLinearFromDetails(details as any);
+      const mapped = mapPreparationDetailsFromApi(details);
+      nextAddedPremixSelections = mapped.addedPremixSelections;
+      nextPremixSessions = mapped.premixSessions;
     }
 
     const snapshot = JSON.stringify({
-      selectedPremix: nextPremix,
-      selectedProcesses: nextSelectedProcesses,
-      solidMaterialCode: nextSolidMaterialCode,
-      liquidMaterialCode: nextLiquidMaterialCode,
-      solidInstances: nextSolidInstances,
-      liquidPartA: nextLiquidPartA,
-      liquidRows: nextLiquidRows,
+      addedPremixSelections: nextAddedPremixSelections,
+      premixSessions: nextPremixSessions,
     });
 
     setActiveBatch(nextBatch);
     setIsEditMode(editMode);
-    setSelectedPremix(nextPremix);
-    setSelectedProcesses(nextSelectedProcesses);
-    setSolidMaterialCode(nextSolidMaterialCode);
-    setLiquidMaterialCode(nextLiquidMaterialCode);
-    setSolidInstances(nextSolidInstances);
-    setLiquidPartA(nextLiquidPartA);
-    setLiquidRows(nextLiquidRows);
-    setLinearData(nextLinearData);
+    setSelectedPremix("");
+    setSelectedProcesses({ ...DEFAULT_SELECTED_PROCESSES });
+    setSolidMaterialCode("");
+    setSolidGradeCode("");
+    setLiquidMaterialCode("");
+    const batchKey = nextBatch.batchId || "__form__";
+    setAddedPremixSelectionsByBatch((prev) => ({
+      ...prev,
+      [batchKey]: nextAddedPremixSelections,
+    }));
+    setPremixSessionsByBatch((prev) => ({
+      ...prev,
+      [batchKey]: nextPremixSessions,
+    }));
     setInitialSnapshot(snapshot);
     setView("form");
   }, [showAlert, subDepartmentId]);
@@ -603,40 +484,12 @@ export const useRawMaterialPrepHook = () => {
     resetFormContext();
   }, [resetFormContext, bumpBatchRefresh, hasSavedDraft]);
 
-  const handleSolidBlocksChange = useCallback(
-    (blocks: SolidProcessInstance[]) => {
-      setSolidInstances(blocks ?? []);
-    },
-    []
-  );
-
-  const handleLiquidBlocksChange = useCallback(
-    (payload: { partA: LiquidPartAState; rows: LiquidPartBRow[] }) => {
-      setLiquidPartA(payload?.partA ?? { ...DEFAULT_LIQUID_PART_A });
-      setLiquidRows(payload?.rows ?? []);
-    },
-    []
-  );
-
-  const handlePremixChange = useCallback(
-    (premix: number | "") => {
-      if (!activeBatchId) {
-        setSelectedPremix(premix);
-        return;
-      }
-      if (selectedPremix !== "") {
-        persistCurrentPremixSession(activeBatchId, selectedPremix);
-      }
-      setSelectedPremix(premix);
-      if (premix === "") {
-        applyPremixSession(createEmptyPremixSession());
-        return;
-      }
-      const saved = premixSessionsByBatch[activeBatchId]?.[premix];
-      applyPremixSession(saved ?? createEmptyPremixSession());
-    },
-    [activeBatchId, selectedPremix, persistCurrentPremixSession, premixSessionsByBatch, applyPremixSession]
-  );
+  const handlePremixChange = useCallback((premix: number | "") => {
+    setSelectedPremix(premix);
+    if (premix === "") {
+      applyPremixSession(createEmptyPremixSession());
+    }
+  }, [applyPremixSession]);
 
   const handleProcessToggle = useCallback(
     (process: RawMaterialPrepProcessKey, checked: boolean) => {
@@ -649,12 +502,9 @@ export const useRawMaterialPrepHook = () => {
         if (process === "solid") {
           setSolidMaterialCode("");
           setSolidGradeCode("");
-          setSolidInstances([]);
           setAvailableSolidMaterials([]);
         } else {
           setLiquidMaterialCode("");
-          setLiquidPartA({ ...DEFAULT_LIQUID_PART_A });
-          setLiquidRows([]);
           setAvailableLiquidMaterials([]);
         }
       }
@@ -691,6 +541,16 @@ export const useRawMaterialPrepHook = () => {
     }
     if (hasLiquid && !liquidMaterialCode) return;
 
+    const solidMaterial = hasSolid
+      ? findPrepMaterialByCode(availableSolidMaterials, solidMaterialCode)
+      : undefined;
+    const liquidMaterial = hasLiquid
+      ? findPrepMaterialByCode(availableLiquidMaterials, liquidMaterialCode)
+      : undefined;
+    const solidGrade = solidMaterial
+      ? findGradeInMaterial(solidMaterial, solidGradeCode)
+      : undefined;
+
     const nextEntry: AddedPremixSelection = {
       premix: selectedPremix,
       selectedProcesses: {
@@ -699,9 +559,13 @@ export const useRawMaterialPrepHook = () => {
       },
       solidMaterialCode,
       solidGradeCode: hasSolid ? solidGradeCode : "",
+      solidMaterialId: solidMaterial?.materialId,
+      solidGradeId: solidGrade?.gradeId,
       liquidMaterialCode,
+      liquidMaterialId: liquidMaterial?.materialId,
     };
     const nextSession: PremixSession = {
+      ...createEmptyPremixSchemaSession(),
       selectedProcesses: {
         solid: hasSolid,
         liquid: hasLiquid,
@@ -709,9 +573,6 @@ export const useRawMaterialPrepHook = () => {
       solidMaterialCode,
       solidGradeCode: hasSolid ? solidGradeCode : "",
       liquidMaterialCode,
-      solidInstances: [],
-      liquidPartA: { ...DEFAULT_LIQUID_PART_A },
-      liquidRows: [],
     };
 
     setAddedPremixSelectionsByBatch((prev) => {
@@ -736,7 +597,9 @@ export const useRawMaterialPrepHook = () => {
     }
 
     setSelectedPremix("");
-    applyPremixSession(createEmptyPremixSession());
+    setSolidMaterialCode("");
+    setSolidGradeCode("");
+    setLiquidMaterialCode("");
   }, [
     selectedPremix,
     selectedProcesses,
@@ -750,8 +613,8 @@ export const useRawMaterialPrepHook = () => {
     availableSolidMaterials,
   ]);
 
-  const handlePremixSolidBlocksChange = useCallback(
-    (premix: number, blocks: SolidProcessInstance[]) => {
+  const handlePremixSlotChange = useCallback(
+    (premix: number, slot: "solid" | "liquid", nextSlot: PremixSession["solid"]) => {
       if (!premix) return;
       setPremixSessionsByBatch((prev) => {
         const batchSessions = prev[activeFormBatchKey] ?? {};
@@ -762,35 +625,18 @@ export const useRawMaterialPrepHook = () => {
             ...batchSessions,
             [premix]: {
               ...current,
-              solidInstances: blocks ?? [],
+              [slot]: nextSlot,
             },
           },
         };
       });
-    },
-    [activeFormBatchKey]
-  );
 
-  const handlePremixLiquidBlocksChange = useCallback(
-    (premix: number, payload: { partA: LiquidPartAState; rows: LiquidPartBRow[] }) => {
-      if (!premix) return;
-      setPremixSessionsByBatch((prev) => {
-        const batchSessions = prev[activeFormBatchKey] ?? {};
-        const current = normalizePremixSession(batchSessions[premix]);
-        return {
-          ...prev,
-          [activeFormBatchKey]: {
-            ...batchSessions,
-            [premix]: {
-              ...current,
-              liquidPartA: payload?.partA ?? { ...DEFAULT_LIQUID_PART_A },
-              liquidRows: payload?.rows ?? [],
-            },
-          },
-        };
-      });
+      const session = premixSessions[premix];
+      if (session && isSessionFilled({ ...session, [slot]: nextSlot })) {
+        markPremixComplete(activeBatchId, premix);
+      }
     },
-    [activeFormBatchKey]
+    [activeFormBatchKey, activeBatchId, markPremixComplete, premixSessions]
   );
 
   const submitForm = useCallback(async (intent: "draft" | "submit") => {
@@ -801,26 +647,17 @@ export const useRawMaterialPrepHook = () => {
       return false;
     }
 
-    if (selectedPremix === "" || !hasProcessSelected) {
+    if (addedPremixSelections.length === 0) {
       showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.SELECT_AT_LEAST_ONE, "warning");
       return false;
     }
 
-    if (selectedProcesses.solid && !solidMaterialCode) {
-      showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.SELECT_RAW_MATERIAL_LABEL, "warning");
+    if (!allPremixSchemasReady) {
+      showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.SCHEMA_LOAD_REQUIRED, "warning");
       return false;
     }
 
-    if (selectedProcesses.liquid && !liquidMaterialCode) {
-      showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.SELECT_RAW_MATERIAL_LABEL, "warning");
-      return false;
-    }
-
-    const hasAnyData =
-      (selectedProcesses.solid && solidHasData) ||
-      (selectedProcesses.liquid && liquidHasData);
-
-    if (!hasAnyData) {
+    if (!premixCardsHaveData) {
       showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.EMPTY_FORM_ERROR, "warning");
       return false;
     }
@@ -828,16 +665,17 @@ export const useRawMaterialPrepHook = () => {
     const status = parseStatus(activeBatch.rmStatus);
     const isCreateFlow = status === parseStatus(RM_STATUS.INITIATED) && !activeBatch.formId;
 
-    const payloadBody = mapPreparationPayload({
-      selectedTypes,
-      solidInstances,
-      liquidData: {
-        partA: liquidPartA,
-        rows: liquidRows,
-      },
-      linearData,
-      intent,
+    const payloadBody = mapPreparationDetailsPayload({
+      addedPremixSelections,
+      premixSessions,
+      solidMaterials: availableSolidMaterials as MaterialsListItem[],
+      liquidMaterials: availableLiquidMaterials as MaterialsListItem[],
     });
+
+    if (!payloadBody.preparationDetails.premixes.length) {
+      showAlert(STRINGS.MANUFACTURING.RAW_MATERIAL_PREP.EMPTY_FORM_ERROR, "warning");
+      return false;
+    }
 
     setActionLoading(true);
     try {
@@ -880,10 +718,6 @@ export const useRawMaterialPrepHook = () => {
       const nextFormId = response.data?.formId ?? activeBatch.formId ?? null;
       setActiveBatch((prev) => (prev ? { ...prev, formId: nextFormId } : prev));
       setInitialSnapshot(formSnapshot);
-      if (activeBatchId) {
-        persistCurrentPremixSession(activeBatchId, selectedPremix);
-        markPremixComplete(activeBatchId, selectedPremix);
-      }
 
       if (intent === "draft") {
         showAlert(
@@ -914,26 +748,16 @@ export const useRawMaterialPrepHook = () => {
   }, [
     activeBatch,
     subDepartmentId,
-    materialTypesArray,
-    selectedTypes,
-    solidInstances,
-    liquidPartA,
-    liquidRows,
-    linearData,
-    solidHasData,
-    liquidHasData,
-    selectedPremix,
-    selectedProcesses,
-    solidMaterialCode,
-    liquidMaterialCode,
-    hasProcessSelected,
+    addedPremixSelections,
+    premixSessions,
+    availableSolidMaterials,
+    availableLiquidMaterials,
+    allPremixSchemasReady,
+    premixCardsHaveData,
     showAlert,
     formSnapshot,
     listParams,
     resetFormContext,
-    persistCurrentPremixSession,
-    markPremixComplete,
-    activeBatchId,
   ]);
 
   const handleSaveDraft = useCallback(async () => {
@@ -966,9 +790,9 @@ export const useRawMaterialPrepHook = () => {
     availablePremixOptions,
     completedPremixes,
     materialTypesArray,
-    solidInstances,
-    liquidPartA,
-    liquidRows,
+    subDepartmentId,
+    premixCardsHaveData,
+    allPremixSchemasReady,
     setBackConfirmOpen,
     handlePremixChange,
     handleProcessToggle,
@@ -976,18 +800,13 @@ export const useRawMaterialPrepHook = () => {
     handleSolidGradeChange,
     handleLiquidMaterialChange,
     handleAddPremixSelection,
-    handlePremixSolidBlocksChange,
-    handlePremixLiquidBlocksChange,
-    solidHasData,
-    liquidHasData,
+    handlePremixSlotChange,
     addedPremixSelections,
     premixSessions,
     handleFillForm,
     handleEditForm,
     handleBack,
     handleDiscardAndBack,
-    handleSolidBlocksChange,
-    handleLiquidBlocksChange,
     handleSaveDraft,
     handleSubmit,
   };

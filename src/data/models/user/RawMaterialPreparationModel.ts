@@ -1,6 +1,20 @@
-import { SOLID_PROCESSES } from "../../../hooks/user/manufacturing/solidPreparationConfig";
-
-export type MaterialTypeKey = "solid" | "liquid" | "linear";
+import type { MaterialsListItem } from "./MaterialsListModel";
+import type {
+  PreparationPremixEntry,
+  PreparationProcessEntry,
+} from "../../../schemaManagement/adapters/rawMaterialPreparation.adapter";
+import {
+  buildProcessSubmission,
+  derivePremixMaterialType,
+  findGradeInMaterial,
+  findMaterialInList,
+} from "../../../schemaManagement/adapters/rawMaterialPreparation.adapter";
+import type {
+  SchemaDocument,
+  SchemaFormValues,
+  SchemaSectionSubmission,
+} from "../../../schemaManagement/models/schema.types";
+import { schemaValuesHaveUserData } from "../../../schemaManagement/models/schemaFormState";
 
 export type RawMaterialPreparationSubmitResponse = {
   formId: string;
@@ -8,260 +22,217 @@ export type RawMaterialPreparationSubmitResponse = {
   status: string;
 };
 
-type ProcessInstance = {
-  processId?: string;
-  processKey?: string;
-  data?: any;
+export type RawMaterialPrepPremixSelection = {
+  premix: number;
+  selectedProcesses: { solid: boolean; liquid: boolean };
+  solidMaterialCode: string;
+  solidGradeCode: string;
+  solidMaterialId?: number;
+  solidGradeId?: number;
+  liquidMaterialCode: string;
+  liquidMaterialId?: number;
+};
+
+export type RawMaterialPrepMaterialSchemaSlot = {
+  schema: SchemaDocument | null;
+  schemaLoading: boolean;
+  schemaError: string | null;
+  formValues: SchemaFormValues;
+};
+
+export type RawMaterialPrepPremixSession = {
+  selectedProcesses: { solid: boolean; liquid: boolean };
+  solidMaterialCode: string;
+  solidGradeCode: string;
+  liquidMaterialCode: string;
+  solid: RawMaterialPrepMaterialSchemaSlot;
+  liquid: RawMaterialPrepMaterialSchemaSlot;
+  pendingSolidSections?: SchemaSectionSubmission[];
+  pendingLiquidSections?: SchemaSectionSubmission[];
 };
 
 export type RawMaterialPreparationDetails = {
   formId: string;
   batchId: string;
   subDepartmentId: number;
-  materialTypes: MaterialTypeKey[];
   formSubmissionType: string;
-  solidPreparation?: {
-    instances?: ProcessInstance[];
-  };
-  liquidPreparation?: {
-    partA?: {
-      jacketTemp?: string | number;
-      rpm?: string | number;
-      time?: string | number;
-    };
-    partB?: {
-      rows?: Array<{
-        materialCode?: string;
-        materialName?: string;
-        percentage?: string | number;
-        weightKg?: string | number;
-        lotNo?: string;
-        dateTime?: string;
-        remarks?: string;
-      }>;
-    };
-  };
-  linearPreparation?: {
-    premix?: {
-      timeA?: string | number;
-      remarksA?: string;
-      timeB?: string | number;
-      remarksB?: string;
-      timeC?: string | number;
-      remarksC?: string;
-    };
-    finalMix?: {
-      timeA?: string | number;
-      remarksA?: string;
-      timeB?: string | number;
-      remarksB?: string;
-    };
-  };
-};
-
-const PROCESS_ID_TO_KEY = SOLID_PROCESSES.reduce<Record<string, string>>((acc, process) => {
-  if (process.processId) {
-    acc[process.processId] = process.key;
-  }
-  return acc;
-}, {});
-
-const PROCESS_KEY_TO_ID = SOLID_PROCESSES.reduce<Record<string, string>>((acc, process) => {
-  if (process.processId) {
-    acc[process.key] = process.processId;
-  }
-  return acc;
-}, {});
-
-const toText = (value: any) => {
-  if (value === null || value === undefined) return "";
-  return String(value);
-};
-
-const toNumberOrString = (value: any) => {
-  if (value === "" || value === null || value === undefined) return "";
-  const num = Number(value);
-  return Number.isNaN(num) ? value : num;
-};
-
-const toDateTimeLocal = (value: string | undefined) => {
-  if (!value) return "";
-  const normalized = String(value);
-  if (normalized.length >= 16) {
-    return normalized.slice(0, 16);
-  }
-  return normalized;
-};
-
-const toDateTimeIso = (value: string | undefined) => {
-  if (!value) return "";
-  if (value.includes("T") && value.length === 16) {
-    return `${value}:00`;
-  }
-  return value;
-};
-
-export const getSelectedTypesFromMaterialTypes = (materialTypes: MaterialTypeKey[]) => {
-  const types = new Set((materialTypes ?? []).map((t) => String(t).toLowerCase()));
-  return {
-    solid: types.has("solid"),
-    liquid: types.has("liquid"),
-    linear: types.has("linear"),
-  };
-};
-
-export const mapSolidInstancesFromDetails = (details: RawMaterialPreparationDetails) => {
-  const instances = details?.solidPreparation?.instances ?? [];
-  return instances.map((instance: ProcessInstance, index: number) => {
-    const processKey = instance.processKey || PROCESS_ID_TO_KEY[String(instance.processId ?? "")] || "";
-    return {
-      instanceId: index + 1,
-      processKey,
-      data: instance.data ?? {},
-    };
-  }).filter((instance) => Boolean(instance.processKey));
-};
-
-export const mapLiquidFromDetails = (details: RawMaterialPreparationDetails) => {
-  const partA = details?.liquidPreparation?.partA ?? {};
-  const rows = details?.liquidPreparation?.partB?.rows ?? [];
-
-  return {
-    partA: {
-      jacketTemp: toText(partA.jacketTemp),
-      rpm: toText(partA.rpm),
-      time: toText(partA.time),
-    },
-    rows: rows.map((row, index) => ({
-      id: index + 1,
-      material: String(row.materialCode ?? row.materialName ?? ""),
-      percentage: toText(row.percentage),
-      weightKg: toText(row.weightKg),
-      lotNo: toText(row.lotNo),
-      dateTime: toDateTimeLocal(row.dateTime),
-      remarks: toText(row.remarks),
-    })),
-  };
-};
-
-export const mapLinearFromDetails = (details: RawMaterialPreparationDetails) => {
-  const premix = details?.linearPreparation?.premix ?? {};
-  const finalMix = details?.linearPreparation?.finalMix ?? {};
-
-  return {
-    premix: {
-      timeA: toText(premix.timeA),
-      remarksA: toText(premix.remarksA),
-      timeB: toText(premix.timeB),
-      remarksB: toText(premix.remarksB),
-      timeC: toText(premix.timeC),
-      remarksC: toText(premix.remarksC),
-    },
-    finalMix: {
-      timeA: toText(finalMix.timeA),
-      remarksA: toText(finalMix.remarksA),
-      timeB: toText(finalMix.timeB),
-      remarksB: toText(finalMix.remarksB),
-    },
-  };
-};
-
-export const mapPreparationPayload = (params: {
-  selectedTypes: { solid: boolean; liquid: boolean; linear: boolean };
-  solidInstances: Array<{ processKey: string; data: any }>;
-  liquidData: {
-    partA: { jacketTemp: string; rpm: string; time: string };
-    rows: Array<{
-      material: string;
-      percentage: string;
-      weightKg: string;
-      lotNo: string;
-      dateTime: string;
-      remarks: string;
+  preparationDetails?: {
+    premixes?: Array<{
+      premixNo: number;
+      materialType: string;
+      solidProcess?: PreparationProcessEntry[];
+      liquidProcess?: PreparationProcessEntry[];
     }>;
+    weightmentSheet?: unknown;
   };
-  linearData: {
-    premix: {
-      timeA: string;
-      remarksA: string;
-      timeB: string;
-      remarksB: string;
-      timeC: string;
-      remarksC: string;
-    };
-    finalMix: {
-      timeA: string;
-      remarksA: string;
-      timeB: string;
-      remarksB: string;
-    };
-  };
-  intent: "draft" | "submit";
+};
+
+const emptySlot = (): RawMaterialPrepMaterialSchemaSlot => ({
+  schema: null,
+  schemaLoading: false,
+  schemaError: null,
+  formValues: {},
+});
+
+export const createEmptyPremixSchemaSession = (): RawMaterialPrepPremixSession => ({
+  selectedProcesses: { solid: false, liquid: false },
+  solidMaterialCode: "",
+  solidGradeCode: "",
+  liquidMaterialCode: "",
+  solid: emptySlot(),
+  liquid: emptySlot(),
+});
+
+const buildProcessForSlot = (
+  schema: SchemaDocument | null,
+  values: SchemaFormValues,
+  material: MaterialsListItem | undefined,
+  gradeCode: string,
+  fallback?: { materialId?: number; materialCode?: string; materialName?: string; gradeId?: number }
+): PreparationProcessEntry | null => {
+  if (!schema || !schemaValuesHaveUserData(values)) return null;
+
+  const resolvedMaterial: MaterialsListItem | undefined =
+    material ??
+    (fallback?.materialId && fallback.materialCode
+      ? {
+          materialId: fallback.materialId,
+          materialCode: fallback.materialCode,
+          materialName: fallback.materialName ?? fallback.materialCode,
+          specCount: 0,
+          grades: [],
+        }
+      : undefined);
+
+  if (!resolvedMaterial) return null;
+
+  const grade =
+    findGradeInMaterial(resolvedMaterial, gradeCode) ??
+    (fallback?.gradeId
+      ? {
+          gradeId: fallback.gradeId,
+          gradeCode,
+          gradeName: gradeCode,
+        }
+      : undefined);
+
+  return buildProcessSubmission(schema, values, resolvedMaterial, grade ?? null);
+};
+
+export const mapPreparationDetailsPayload = (params: {
+  addedPremixSelections: RawMaterialPrepPremixSelection[];
+  premixSessions: Record<number, RawMaterialPrepPremixSession>;
+  solidMaterials: MaterialsListItem[];
+  liquidMaterials: MaterialsListItem[];
 }) => {
-  const { selectedTypes, solidInstances, liquidData, linearData, intent } = params;
+  const premixes: PreparationPremixEntry[] = [];
 
-  const materialTypes: MaterialTypeKey[] = [];
-  if (selectedTypes.solid) materialTypes.push("solid");
-  if (selectedTypes.liquid) materialTypes.push("liquid");
-  if (selectedTypes.linear) materialTypes.push("linear");
+  params.addedPremixSelections.forEach((entry) => {
+    const session = params.premixSessions[entry.premix] ?? createEmptyPremixSchemaSession();
+    const solidMaterial = findMaterialInList(params.solidMaterials, entry.solidMaterialCode);
+    const liquidMaterial = findMaterialInList(params.liquidMaterials, entry.liquidMaterialCode);
 
-  const payload: any = { materialTypes };
+    const solidProcess: PreparationProcessEntry[] = [];
+    const liquidProcess: PreparationProcessEntry[] = [];
 
-  if (selectedTypes.solid) {
-    const solidInstancesPayload = (solidInstances ?? [])
-      .filter((inst) => Boolean(inst.processKey) && Boolean(PROCESS_KEY_TO_ID[inst.processKey]))
-      .map((inst) => ({
-        processId: PROCESS_KEY_TO_ID[inst.processKey],
-        data: inst.data ?? {},
-      }));
+    if (entry.selectedProcesses.solid) {
+      const process = buildProcessForSlot(
+        session.solid.schema,
+        session.solid.formValues,
+        solidMaterial,
+        entry.solidGradeCode,
+        {
+          materialId: entry.solidMaterialId,
+          materialCode: entry.solidMaterialCode,
+          materialName: session.solid.schema?.rawMaterialDetails.materialName,
+          gradeId: entry.solidGradeId,
+        }
+      );
+      if (process) solidProcess.push(process);
+    }
 
-    payload.solidPreparation = {
-      instances: intent === "draft"
-        ? solidInstancesPayload
-        : solidInstancesPayload.filter((inst) => Object.keys(inst.data ?? {}).length > 0),
+    if (entry.selectedProcesses.liquid) {
+      const process = buildProcessForSlot(
+        session.liquid.schema,
+        session.liquid.formValues,
+        liquidMaterial,
+        "",
+        {
+          materialId: entry.liquidMaterialId,
+          materialCode: entry.liquidMaterialCode,
+          materialName: session.liquid.schema?.rawMaterialDetails.materialName,
+        }
+      );
+      if (process) liquidProcess.push(process);
+    }
+
+    if (solidProcess.length === 0 && liquidProcess.length === 0) return;
+
+    premixes.push({
+      premixNo: entry.premix,
+      materialType: derivePremixMaterialType(entry),
+      solidProcess,
+      liquidProcess,
+    });
+  });
+
+  return {
+    preparationDetails: {
+      premixes,
+    },
+  };
+};
+
+export const mapPreparationDetailsFromApi = (
+  details: RawMaterialPreparationDetails
+): {
+  addedPremixSelections: RawMaterialPrepPremixSelection[];
+  premixSessions: Record<number, RawMaterialPrepPremixSession>;
+} => {
+  const premixes = details.preparationDetails?.premixes ?? [];
+  const addedPremixSelections: RawMaterialPrepPremixSelection[] = [];
+  const premixSessions: Record<number, RawMaterialPrepPremixSession> = {};
+
+  premixes.forEach((premix) => {
+    const premixNo = Number(premix.premixNo ?? 0);
+    if (!premixNo) return;
+
+    const solidEntry = premix.solidProcess?.[0];
+    const liquidEntry = premix.liquidProcess?.[0];
+    const hasSolid = (premix.solidProcess?.length ?? 0) > 0;
+    const hasLiquid = (premix.liquidProcess?.length ?? 0) > 0;
+
+    addedPremixSelections.push({
+      premix: premixNo,
+      selectedProcesses: { solid: hasSolid, liquid: hasLiquid },
+      solidMaterialCode: solidEntry?.materialCode ?? "",
+      solidGradeCode: solidEntry?.gradeCode ?? "",
+      solidMaterialId: solidEntry?.materialId,
+      solidGradeId: solidEntry?.gradeId ?? undefined,
+      liquidMaterialCode: liquidEntry?.materialCode ?? "",
+      liquidMaterialId: liquidEntry?.materialId,
+    });
+
+    premixSessions[premixNo] = {
+      ...createEmptyPremixSchemaSession(),
+      selectedProcesses: { solid: hasSolid, liquid: hasLiquid },
+      solidMaterialCode: solidEntry?.materialCode ?? "",
+      solidGradeCode: solidEntry?.gradeCode ?? "",
+      liquidMaterialCode: liquidEntry?.materialCode ?? "",
+      pendingSolidSections: solidEntry?.sections,
+      pendingLiquidSections: liquidEntry?.sections,
     };
-  }
+  });
 
-  if (selectedTypes.liquid) {
-    payload.liquidPreparation = {
-      partA: {
-        jacketTemp: toNumberOrString(liquidData.partA.jacketTemp),
-        rpm: toNumberOrString(liquidData.partA.rpm),
-        time: toNumberOrString(liquidData.partA.time),
-      },
-      partB: {
-        rows: (liquidData.rows ?? []).map((row) => ({
-          materialCode: String(row.material ?? "").trim(),
-          percentage: toNumberOrString(row.percentage),
-          weightKg: toNumberOrString(row.weightKg),
-          lotNo: String(row.lotNo ?? ""),
-          dateTime: toDateTimeIso(row.dateTime),
-          remarks: String(row.remarks ?? ""),
-        })),
-      },
-    };
-  }
+  return { addedPremixSelections, premixSessions };
+};
 
-  if (selectedTypes.linear) {
-    payload.linearPreparation = {
-      premix: {
-        timeA: toNumberOrString(linearData.premix.timeA),
-        remarksA: String(linearData.premix.remarksA ?? ""),
-        timeB: toNumberOrString(linearData.premix.timeB),
-        remarksB: String(linearData.premix.remarksB ?? ""),
-        timeC: toNumberOrString(linearData.premix.timeC),
-        remarksC: String(linearData.premix.remarksC ?? ""),
-      },
-      finalMix: {
-        timeA: toNumberOrString(linearData.finalMix.timeA),
-        remarksA: String(linearData.finalMix.remarksA ?? ""),
-        timeB: toNumberOrString(linearData.finalMix.timeB),
-        remarksB: String(linearData.finalMix.remarksB ?? ""),
-      },
-    };
-  }
-
-  return payload;
+export const premixSessionHasData = (session: RawMaterialPrepPremixSession) => {
+  const solidFilled =
+    session.selectedProcesses.solid && schemaValuesHaveUserData(session.solid.formValues);
+  const liquidFilled =
+    session.selectedProcesses.liquid && schemaValuesHaveUserData(session.liquid.formValues);
+  return solidFilled || liquidFilled;
 };
 
 export class RawMaterialPreparationSubmitResponseModel {
@@ -290,11 +261,8 @@ export class RawMaterialPreparationDetailsModel {
       formId: String(data?.formId ?? ""),
       batchId: String(data?.batchId ?? ""),
       subDepartmentId: Number(data?.subDepartmentId ?? 0),
-      materialTypes: Array.isArray(data?.materialTypes) ? data.materialTypes : [],
       formSubmissionType: String(data?.formSubmissionType ?? ""),
-      solidPreparation: data?.solidPreparation ?? { instances: [] },
-      liquidPreparation: data?.liquidPreparation ?? { partA: {}, partB: { rows: [] } },
-      linearPreparation: data?.linearPreparation ?? { premix: {}, finalMix: {} },
+      preparationDetails: data?.preparationDetails ?? { premixes: [] },
     };
   }
 }

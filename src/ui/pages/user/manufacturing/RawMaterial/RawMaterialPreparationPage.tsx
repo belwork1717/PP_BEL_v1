@@ -43,9 +43,9 @@ const RawMaterialPreparationPage = () => {
     backConfirmOpen,
     setBackConfirmOpen,
     materialTypesArray,
-    solidInstances,
-    liquidPartA,
-    liquidRows,
+    subDepartmentId,
+    premixCardsHaveData,
+    allPremixSchemasReady,
     actionLoading,
     selectedTypes,
     selectedPremix,
@@ -65,17 +65,12 @@ const RawMaterialPreparationPage = () => {
     handleAddPremixSelection,
     addedPremixSelections,
     premixSessions,
-    handlePremixSolidBlocksChange,
-    handlePremixLiquidBlocksChange,
+    handlePremixSlotChange,
     handleBack,
     handleDiscardAndBack,
-    handleSolidBlocksChange,
-    handleLiquidBlocksChange,
     handleSaveDraft,
     handleSubmit,
   } = hookState;
-
-  const processes = { ...DEFAULT_SELECTED_PROCESSES, ...(selectedProcesses ?? {}) };
 
   const listHookState = useMemo(() => {
     const existing = hookState.batches ?? [];
@@ -131,23 +126,15 @@ const RawMaterialPreparationPage = () => {
             onAddPremixSelection={handleAddPremixSelection}
             addedPremixSelections={addedPremixSelections}
             premixSessions={premixSessions}
-            onPremixSolidBlocksChange={handlePremixSolidBlocksChange}
-            onPremixLiquidBlocksChange={handlePremixLiquidBlocksChange}
+            onPremixSlotChange={handlePremixSlotChange}
+            subDepartmentId={subDepartmentId}
             theme={theme}
             handleBack={handleBack}
-            solidInstances={solidInstances}
-            liquidPartA={liquidPartA}
-            liquidRows={liquidRows}
-            handleSolidBlocksChange={handleSolidBlocksChange}
-            handleLiquidBlocksChange={handleLiquidBlocksChange}
             onSaveDraft={() => setDraftConfirmOpen(true)}
             onSubmit={() => setSubmitConfirmOpen(true)}
             actionLoading={actionLoading}
             disableActions={
-              selectedPremix === "" ||
-              (!processes.solid && !processes.liquid) ||
-              (processes.solid && !solidMaterialCode) ||
-              (processes.liquid && !liquidMaterialCode)
+              !premixCardsHaveData || !allPremixSchemasReady
             }
           />
         </Box>

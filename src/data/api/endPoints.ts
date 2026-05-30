@@ -223,7 +223,7 @@ export const USER_RAW_MATERIAL_PREPARATION_ENDPOINTS = {
   CREATE_FORM: `${API_BASE}/user/raw-material-preparation/form/create`,
   FORM_DETAILS: `${API_BASE}/user/raw-material-preparation/form/details`,
   UPDATE_FORM: `${API_BASE}/user/raw-material-preparation/form/update`,
-  PROCESSING_SCHEMA: `${API_BASE}/user/raw-material-preparation/processing-schema`,
+  SCHEMA_RAW_MATERIAL: `${API_BASE}/user/raw-material-preparation/schema/raw-material`,
 };
 
 export const USER_CASE_PREPARATION_ENDPOINTS = {

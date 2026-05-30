@@ -8,57 +8,26 @@ import {
   fetchRawMaterialPreparationFormDetailsApi,
   updateRawMaterialPreparationFormApi,
 } from "../../../data/api/users/manufacturing/rawMaterialPreparationApi";
-import { fetchRawMaterialProcessingSchemaApi } from "../../../data/api/users/manufacturing/rawMaterialProcessingSchemaApi";
-import { normalizeRawMaterialProcessingSchema } from "../../../data/models/user/RawMaterialProcessingSchemaModel";
-import type { RawMaterialProcessingSchema } from "../../../data/models/user/rawMaterialProcessingSchema.types";
 
 export type RawMaterialPreparationCreatePayload = {
   batchId: string;
   subDepartmentId: number;
   formSubmissionType: "DRAFT" | "SUBMIT";
-  materialTypes: Array<"solid" | "liquid" | "linear">;
-  solidPreparation?: {
-    instances: Array<{
-      processId: string;
-      data: any;
+  preparationDetails: {
+    premixes: Array<{
+      premixNo: number;
+      materialType: "SOLID" | "LIQUID" | "BOTH";
+      solidProcess: Array<Record<string, unknown>>;
+      liquidProcess: Array<Record<string, unknown>>;
     }>;
-  };
-  liquidPreparation?: {
-    partA: {
-      jacketTemp: string | number;
-      rpm: string | number;
-      time: string | number;
-    };
-    partB: {
-      rows: Array<{
-        materialCode: string;
-        percentage: string | number;
-        weightKg: string | number;
-        lotNo: string;
-        dateTime: string;
-        remarks: string;
-      }>;
-    };
-  };
-  linearPreparation?: {
-    premix: {
-      timeA: string | number;
-      remarksA: string;
-      timeB: string | number;
-      remarksB: string;
-      timeC: string | number;
-      remarksC: string;
-    };
-    finalMix: {
-      timeA: string | number;
-      remarksA: string;
-      timeB: string | number;
-      remarksB: string;
-    };
+    weightmentSheet?: unknown;
   };
 };
 
-export type RawMaterialPreparationUpdatePayload = Omit<RawMaterialPreparationCreatePayload, "batchId" | "formSubmissionType"> & {
+export type RawMaterialPreparationUpdatePayload = Omit<
+  RawMaterialPreparationCreatePayload,
+  "batchId" | "formSubmissionType"
+> & {
   formId: string;
   formSubmissionType: "DRAFT" | "UPDATE";
 };
@@ -66,10 +35,6 @@ export type RawMaterialPreparationUpdatePayload = Omit<RawMaterialPreparationCre
 export type RawMaterialPreparationDetailsPayload = {
   formId: string;
   subDepartmentId: number;
-};
-
-export type RawMaterialProcessingSchemaPayload = {
-  materialCode: string;
 };
 
 export const rawMaterialPreparationController = {
@@ -105,18 +70,6 @@ export const rawMaterialPreparationController = {
       );
     } catch (error) {
       console.error("Failed to update raw material preparation form:", error);
-      return new ApiResponseModel(error);
-    }
-  },
-
-  fetchProcessingSchema: async (payload: RawMaterialProcessingSchemaPayload) => {
-    try {
-      const response = await fetchRawMaterialProcessingSchemaApi(payload);
-      return new ApiResponseModel<RawMaterialProcessingSchema | null>(response, (res) =>
-        normalizeRawMaterialProcessingSchema(res)
-      );
-    } catch (error) {
-      console.error("Failed to fetch raw material processing schema:", error);
       return new ApiResponseModel(error);
     }
   },

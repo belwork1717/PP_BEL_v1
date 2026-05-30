@@ -2,12 +2,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
-import SolidPreparation from "./SolidPreparation";
-import LiquidPreparation from "./LiquidPreparation";
 import RawMaterialPrepFlowBar from "./RawMaterialPrepFlowBar";
+import RawMaterialPremixSchemaPanel from "./RawMaterialPremixSchemaPanel";
 import { STRINGS } from "../../../../../app/config/strings";
 import { icons } from "../../../../../app/theme/icons";
 import { DEFAULT_SELECTED_PROCESSES, materialRequiresGradeSelection } from "../../../../../hooks/user/manufacturing/rawMaterialPrepFlowConfig";
+import type { RawMaterialPrepPremixSession } from "../../../../../data/models/user/RawMaterialPreparationModel";
+import type { MaterialsListItem } from "../../../../../data/models/user/MaterialsListModel";
 
 const RM = STRINGS.MANUFACTURING.RAW_MATERIAL_PREP;
 const { info: InfoOutlinedIcon } = icons.user.manufacturing.rawMaterial.builderPage;
@@ -15,7 +16,6 @@ const { info: InfoOutlinedIcon } = icons.user.manufacturing.rawMaterial.builderP
 const RawMaterialBuilderForm = ({
   activeBatch,
   isEditMode,
-  selectedTypes,
   selectedPremix,
   selectedProcesses,
   solidMaterialCode,
@@ -33,15 +33,10 @@ const RawMaterialBuilderForm = ({
   onAddPremixSelection,
   addedPremixSelections,
   premixSessions,
-  onPremixSolidBlocksChange,
-  onPremixLiquidBlocksChange,
+  onPremixSlotChange,
+  subDepartmentId,
   theme,
   handleBack,
-  solidInstances,
-  liquidPartA,
-  liquidRows,
-  handleSolidBlocksChange,
-  handleLiquidBlocksChange,
   onSaveDraft,
   onSubmit,
   actionLoading,
@@ -63,6 +58,7 @@ const RawMaterialBuilderForm = ({
     (!processes.solid || Boolean(solidMaterialCode)) &&
     (!solidNeedsGrade || Boolean(solidGradeCode)) &&
     (!processes.liquid || Boolean(liquidMaterialCode));
+
   const premixCards = Array.isArray(addedPremixSelections) ? addedPremixSelections : [];
   const [activePremixIndex, setActivePremixIndex] = useState(0);
 
@@ -78,6 +74,10 @@ const RawMaterialBuilderForm = ({
     () => (premixCards.length > 0 ? premixCards[activePremixIndex] : null),
     [premixCards, activePremixIndex]
   );
+
+  const activeSession: RawMaterialPrepPremixSession | null = activePremixEntry
+    ? premixSessions?.[activePremixEntry.premix] ?? null
+    : null;
 
   return (
     <>
@@ -101,7 +101,7 @@ const RawMaterialBuilderForm = ({
         theme={theme}
       />
 
-      {premixCards.length > 0 && activePremixEntry && (
+      {premixCards.length > 0 && activePremixEntry && activeSession && (
         <Stack spacing={1.25} mb={2}>
           <Box
             sx={{
@@ -164,30 +164,36 @@ const RawMaterialBuilderForm = ({
 
             {activePremixEntry.selectedProcesses?.solid && (
               <Box mt={1.2} sx={rmTheme.builder.sectionContainer}>
-                <SolidPreparation
-                  key={`premix-${activePremixEntry.premix}-solid`}
-                  data={activeBatch as any}
-                  selectedMaterialCode={activePremixEntry.solidMaterialCode}
-                  initialInstances={premixSessions?.[activePremixEntry.premix]?.solidInstances ?? []}
-                  isEditMode={isEditMode}
-                  onBlocksChange={(blocks: any) => onPremixSolidBlocksChange(activePremixEntry.premix, blocks)}
-                  onBack={handleBack}
+                <RawMaterialPremixSchemaPanel
+                  slot="solid"
+                  materialCode={activePremixEntry.solidMaterialCode}
+                  materialId={activePremixEntry.solidMaterialId}
+                  gradeCode={activePremixEntry.solidGradeCode}
+                  gradeId={activePremixEntry.solidGradeId}
+                  materials={availableSolidMaterials as MaterialsListItem[]}
+                  subDepartmentId={subDepartmentId}
+                  slotState={activeSession.solid}
+                  savedSections={activeSession.pendingSolidSections}
+                  onSlotChange={(next) =>
+                    onPremixSlotChange(activePremixEntry.premix, "solid", next)
+                  }
                 />
               </Box>
             )}
 
             {activePremixEntry.selectedProcesses?.liquid && (
               <Box mt={1.2} sx={rmTheme.builder.sectionContainer}>
-                <LiquidPreparation
-                  key={`premix-${activePremixEntry.premix}-liquid`}
-                  data={activeBatch as any}
-                  initialData={{
-                    partA: premixSessions?.[activePremixEntry.premix]?.liquidPartA,
-                    rows: premixSessions?.[activePremixEntry.premix]?.liquidRows,
-                  }}
-                  isEditMode={isEditMode}
-                  onBlocksChange={(payload: any) => onPremixLiquidBlocksChange(activePremixEntry.premix, payload)}
-                  onBack={handleBack}
+                <RawMaterialPremixSchemaPanel
+                  slot="liquid"
+                  materialCode={activePremixEntry.liquidMaterialCode}
+                  materialId={activePremixEntry.liquidMaterialId}
+                  materials={availableLiquidMaterials as MaterialsListItem[]}
+                  subDepartmentId={subDepartmentId}
+                  slotState={activeSession.liquid}
+                  savedSections={activeSession.pendingLiquidSections}
+                  onSlotChange={(next) =>
+                    onPremixSlotChange(activePremixEntry.premix, "liquid", next)
+                  }
                 />
               </Box>
             )}
@@ -237,18 +243,10 @@ const RawMaterialBuilderForm = ({
       )}
 
       <Stack direction={{ xs: "column", sm: "row" }} gap={1.5} mt={3} justifyContent="flex-end">
-        <Button
-          variant="outlined"
-          disabled={actionLoading || disableActions}
-          onClick={onSaveDraft}
-        >
+        <Button variant="outlined" disabled={actionLoading || disableActions} onClick={onSaveDraft}>
           {labels.SAVE_DRAFT}
         </Button>
-        <Button
-          variant="contained"
-          disabled={actionLoading || disableActions}
-          onClick={onSubmit}
-        >
+        <Button variant="contained" disabled={actionLoading || disableActions} onClick={onSubmit}>
           {isResubmission ? labels.RESUBMIT_APPROVAL : labels.SUBMIT_APPROVAL}
         </Button>
       </Stack>

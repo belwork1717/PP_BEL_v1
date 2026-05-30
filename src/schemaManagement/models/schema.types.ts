@@ -1,0 +1,109 @@
+export type SchemaFieldType =
+  | "text"
+  | "number"
+  | "datetime"
+  | "textarea"
+  | "dropdown"
+  | "table"
+  | string;
+
+export type SchemaField = {
+  key: string;
+  label: string;
+  type: SchemaFieldType;
+  unit?: string;
+  required?: boolean;
+  readonly?: boolean;
+  group?: string;
+  options?: string[];
+  addRowAllowed?: boolean;
+  columns?: SchemaColumn[];
+  defaultRows?: Record<string, unknown>[];
+};
+
+export type SchemaColumn = {
+  key: string;
+  label: string;
+  type: SchemaFieldType;
+  readonly?: boolean;
+  unit?: string;
+};
+
+export type SchemaNestedGroup = {
+  fields: SchemaField[];
+};
+
+export type SchemaSection = {
+  sectionId: string;
+  title: string;
+  type: "dynamic-group" | "table" | "form" | string;
+  addRowAllowed?: boolean;
+  groupLabel?: string;
+  fields?: SchemaField[];
+  columns?: SchemaColumn[];
+  defaultRows?: Record<string, unknown>[];
+  lots?: SchemaNestedGroup;
+  drums?: SchemaNestedGroup;
+};
+
+export type SchemaGrade = {
+  gradeId: number;
+  gradeCode: string;
+  gradeName: string;
+};
+
+export type SchemaMaterialDetails = {
+  materialId: number;
+  materialCode: string;
+  materialName: string;
+  materialType: string;
+  grade?: SchemaGrade | null;
+};
+
+export type SchemaDocument = {
+  schemaVersion: string;
+  schemaType: string;
+  functionality: string;
+  layout?: { type: string };
+  rawMaterialDetails: SchemaMaterialDetails;
+  sections: SchemaSection[];
+};
+
+export type SchemaFormValues = Record<string, unknown[]>;
+
+export type SchemaSectionSubmission = {
+  sectionId: string;
+  sectionData: unknown[];
+};
+
+export type SchemaProcessSubmission = {
+  materialId: number;
+  materialCode: string;
+  materialName: string;
+  gradeId: number | null;
+  gradeCode: string | null;
+  schemaVersion: string;
+  schemaType: string;
+  sections: SchemaSectionSubmission[];
+};
+
+export type SchemaThemeTokens = {
+  primary: string;
+  primaryLight?: string;
+  surface: string;
+  border: string;
+  text: string;
+  textSub: string;
+  accent?: string;
+  warn?: string;
+};
+
+export const DEFAULT_SCHEMA_THEME: SchemaThemeTokens = {
+  primary: "#1B4F72",
+  primaryLight: "#2E86C1",
+  surface: "#F4F6F8",
+  border: "#D5D8DC",
+  text: "#1C2833",
+  textSub: "#5D6D7E",
+  warn: "#D4AC0D",
+};

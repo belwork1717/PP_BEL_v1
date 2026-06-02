@@ -23,19 +23,22 @@ const UserFormModal = ({
     selectorMaxHeight,
     subDeptsRestricted,
     subDeptsMandatory,
-    formValid,
-    selectedSubDeptIds,
+    canSubmit,
+    pendingSubDeptIds,
+    pendingSubDepts,
     filteredDepts,
+    handleOpenSelector,
+    handleCommitSelector,
+    handleCancelSelector,
     handleToggleDept,
     handleRemoveSubDept,
-    handleClearAll,
-    handleToggleSelector,
+    handleClearPending,
   } = useUserFormModal({ open, editTarget, availableSubDepts, form, onSubDeptsChange });
 
   return (
     <Dialog
       open={open} onClose={() => !saving && onClose()}
-      TransitionComponent={Zoom} maxWidth="sm" fullWidth
+      TransitionComponent={Zoom} maxWidth="md" fullWidth
       PaperProps={{ sx: modal.paper }}
     >
       <DialogTitle sx={{ p: 0 }}>
@@ -122,7 +125,7 @@ const UserFormModal = ({
                 <Button
                   size="small"
                   variant={selectorOpen ? "contained" : "outlined"}
-                  onClick={handleToggleSelector}
+                  onClick={selectorOpen ? handleCommitSelector : handleOpenSelector}
                   startIcon={<icons.userMgmt.add sx={{ fontSize: "14px !important" }} />}
                   sx={{
                     ...modal.selectorToggleBase,
@@ -145,15 +148,15 @@ const UserFormModal = ({
                     {/* Header: Selection Status, Clear All & Close List */}
                     <Box sx={modal.selectorHeader}>
                       <Typography sx={modal.selectorHeaderCount}>
-                        {form.subDepts.length} selected
+                        {pendingSubDepts.length} selected
                       </Typography>
                       <Box display="flex" alignItems="center" gap={1.5}>
-                        {form.subDepts.length > 0 && (
-                          <Button size="small" onClick={handleClearAll} sx={modal.clearAllButton}>
+                        {pendingSubDepts.length > 0 && (
+                          <Button size="small" onClick={handleClearPending} sx={modal.clearAllButton}>
                             Clear all
                           </Button>
                         )}
-                        <IconButton size="small" onClick={handleToggleSelector} sx={modal.selectorCloseIcon}>
+                        <IconButton size="small" onClick={handleCancelSelector} sx={modal.selectorCloseIcon}>
                           <icons.userMgmt.close sx={{ fontSize: 16 }} />
                         </IconButton>
                       </Box>
@@ -179,7 +182,7 @@ const UserFormModal = ({
                         </Typography>
                       ) : (
                         filteredDepts.map((sd: any) => {
-                          const checked = selectedSubDeptIds.includes(sd.subDepartmentId);
+                          const checked = pendingSubDeptIds.includes(sd.subDepartmentId);
                           return (
                             <Box
                               key={sd.subDepartmentId}
@@ -245,7 +248,7 @@ const UserFormModal = ({
 
       <DialogActions sx={modal.actions}>
         <Button onClick={() => !saving && onClose()} sx={modal.cancelButton}>Cancel</Button>
-        <Button variant="contained" onClick={onSave} disabled={!formValid || saving} sx={modal.saveButton}>
+        <Button variant="contained" onClick={onSave} disabled={!canSubmit || saving} sx={modal.saveButton}>
           {saving
             ? <><CircularProgress size={14} sx={modal.savingSpinner} />Saving…</>
             : editTarget ? "Update Changes" : "Create User"}

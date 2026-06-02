@@ -5,7 +5,28 @@ import { STRINGS } from "../../../app/config/strings";
 
 const EMPTY_FORM = { username: "", userId: "", role: "", subDepts: [] };
 
-const getUserUUID = (user: any) => user?.userUUID || user?.user_uuid || user?.id || "";
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const asUuid = (value: any) => {
+  const v = String(value ?? "").trim();
+  return UUID_REGEX.test(v) ? v : "";
+};
+
+const getUserUUID = (user: any) =>
+  asUuid(user?.userUUID) ||
+  asUuid(user?.user_uuid) ||
+  asUuid(user?.uuid) ||
+  asUuid(user?.id) ||
+  "";
+const normalizeIds = (values: any[]) =>
+  Array.from(
+    new Set(
+      (values || [])
+        .map((value: any) => Number(value))
+        .filter((id: number) => Number.isFinite(id))
+    )
+  ).sort((a, b) => a - b);
 
 export const useUserActions = (availableRoles: any[], onSuccess: () => void) => {
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,7 +61,12 @@ export const useUserActions = (availableRoles: any[], onSuccess: () => void) => 
       // API 4: fetch strict user details layout specifically for updating mapping
       const resp = await userManagementController.getUserById(userUUID);
       if (resp?.success && resp.data) {
-         setEditTarget(resp.data);
+         const resolvedUUID = getUserUUID(resp.data) || userUUID;
+         setEditTarget({
+           ...resp.data,
+           userUUID: resolvedUUID,
+           user_uuid: resolvedUUID,
+         });
          setForm({
            username: resp.data.username || "",
            userId: (resp.data.userId || user.userId || "") as string,
@@ -62,35 +88,64 @@ export const useUserActions = (availableRoles: any[], onSuccess: () => void) => 
   };
 
   const handleSave = async () => {
-    if (!form.username || !form.role) return;
+    const trimmedUsername = form.username?.trim() || "";
+    if (!editTarget && (!trimmedUsername || !form.role || !form.userId?.trim())) return;
     setSaving(true);
     useAlertStore.getState().showAlert(STRINGS.USER_MANAGEMENT.MESSAGES.SAVING_USER, "info", { loading: true });
     
     const selectedRoleObj = availableRoles.find(r => r.roleName === form.role);
-    
-    const basePayload: any = {
-      username: form.username,
-      subDepartments: form.subDepts.map((sd: any) => ({
-        subDepartmentId: sd.subDepartmentId,
-        subDepartmentName: sd.subDepartmentName,
-        departmentId: sd.departmentId
-      }))
-    };
-
-    if (!editTarget && selectedRoleObj) {
-      basePayload.role = { roleId: selectedRoleObj.roleId, roleName: selectedRoleObj.roleName };
+    if (!editTarget && !selectedRoleObj?.roleId) {
+      useAlertStore.getState().showAlert(STRINGS.USER_MANAGEMENT.MESSAGES.OPERATION_FAILED, "error", { autoCloseMs: 3000 });
+      setSaving(false);
+      return;
     }
-
+    const subDepartmentIds = normalizeIds(
+      form.subDepts.map((sd: any) => sd?.subDepartmentId)
+    );
+    
     let resp;
     
     if (editTarget) {
-      // API 3: update requires user_uuid
-       basePayload.user_uuid = getUserUUID(editTarget);
-       resp = await userManagementController.updateUser(basePayload);
+      // API 3: update requires user_uuid and only changed fields.
+      const updatePayload: any = {
+        user_uuid: getUserUUID(editTarget),
+      };
+      if (!updatePayload.user_uuid) {
+        useAlertStore.getState().showAlert("Unable to resolve user UUID for update.", "error", { autoCloseMs: 3000 });
+        setSaving(false);
+        return;
+      }
+      const originalUsername = String(editTarget?.username || "").trim();
+      const originalSubDepartmentIds = normalizeIds(
+        Array.isArray(editTarget?.subDepartments)
+          ? editTarget.subDepartments.map((sd: any) => sd?.subDepartmentId)
+          : []
+      );
+      const subDepartmentsChanged =
+        subDepartmentIds.length !== originalSubDepartmentIds.length ||
+        subDepartmentIds.some((id, idx) => id !== originalSubDepartmentIds[idx]);
+
+      if (trimmedUsername && trimmedUsername !== originalUsername) {
+        updatePayload.username = trimmedUsername;
+      }
+      if (subDepartmentsChanged) {
+        updatePayload.subDepartmentIds = subDepartmentIds;
+      }
+      if (!updatePayload.username && !updatePayload.subDepartmentIds) {
+        useAlertStore.getState().showAlert("No changes to update.", "info", { autoCloseMs: 2000 });
+        setSaving(false);
+        return;
+      }
+      resp = await userManagementController.updateUser(updatePayload);
     } else {
-      // API 1: create requires userId payload string
-       basePayload.userId = form.userId;
-       resp = await userManagementController.createUser(basePayload);
+      // API 1: create expects userId, username, roleId, and subDepartmentIds.
+      const createPayload: any = {
+        userId: form.userId.trim(),
+        username: trimmedUsername,
+        roleId: selectedRoleObj?.roleId,
+        subDepartmentIds,
+      };
+      resp = await userManagementController.createUser(createPayload);
     }
       
     if (resp?.success) {

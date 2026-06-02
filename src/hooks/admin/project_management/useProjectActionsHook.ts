@@ -100,13 +100,17 @@ export const useProjectActions = (onRefresh: () => void) => {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget?.projectId) return;
+    const projectId = String(deleteTarget?.projectId ?? "").trim();
+    if (!projectId) {
+      useAlertStore.getState().showAlert("Project ID not found for deletion", "error", { autoCloseMs: 3000 });
+      return;
+    }
 
     setDeleting(true);
     useAlertStore.getState().showAlert("Deleting project...", "info", { loading: true });
 
     try {
-      const resp = await projectManagementController.deleteProject(deleteTarget.projectId);
+      const resp = await projectManagementController.deleteProject(projectId);
 
       if (resp?.success) {
         useAlertStore.getState().showAlert(

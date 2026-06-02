@@ -829,6 +829,7 @@ export const STRINGS = {
       EMPTY_FORM_ERROR: "Add at least one value before saving or submitting.",
       SCHEMA_LOAD_REQUIRED:
         "All premix forms must load their schema successfully before saving or submitting.",
+      DELETE_PREMIX_TOOLTIP: "Remove this premix",
       CREATE_FAILED: "Failed to create raw material preparation form.",
       UPDATE_FAILED: "Failed to update raw material preparation form.",
       CREATE_DRAFT_SUCCESS: "Raw material preparation saved as draft successfully.",

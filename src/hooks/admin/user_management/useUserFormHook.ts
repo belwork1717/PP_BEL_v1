@@ -2,6 +2,11 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 
 const SUBDEPT_RESTRICTED_ROLES = ["Admin", "System Manager"];
 const SUBDEPT_MANDATORY_ROLES = ["User", "Approver"];
+const normalizeSubDeptIds = (subDepts: any[]) =>
+  (Array.isArray(subDepts) ? subDepts : [])
+    .map((sd: any) => Number(sd?.subDepartmentId))
+    .filter((id: number) => Number.isFinite(id))
+    .sort((a, b) => a - b);
 
 export const useUserFormModal = ({
   open,
@@ -16,29 +21,24 @@ export const useUserFormModal = ({
   form: any;
   onSubDeptsChange: (subDepts: any[]) => void;
 }) => {
-  // Selector panel open/close
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [search, setSearch] = useState("");
-
-  // Dynamically computed card height based on viewport
+  const [pendingSubDepts, setPendingSubDepts] = useState<any[]>([]);
   const [selectorMaxHeight, setSelectorMaxHeight] = useState(240);
 
-  // Reset selector state when modal opens/closes or editTarget changes
   useEffect(() => {
     if (!open) {
       setSelectorOpen(false);
       setSearch("");
+      setPendingSubDepts([]);
     }
   }, [open, editTarget]);
 
-  // Compute available height for the selector list dynamically
   useEffect(() => {
     const computeHeight = () => {
       const viewportHeight = window.innerHeight;
-      // Modal takes ~90vh max, header ~72px, footer ~60px, fields above ~220px, card chrome ~90px
       const reserved = 72 + 60 + 220 + 90;
       const available = Math.floor(viewportHeight * 0.9) - reserved;
-      // Clamp between 120px (at least 2 items) and 320px
       setSelectorMaxHeight(Math.min(320, Math.max(120, available)));
     };
 
@@ -47,7 +47,6 @@ export const useUserFormModal = ({
     return () => window.removeEventListener("resize", computeHeight);
   }, []);
 
-  // Role flags
   const subDeptsRestricted = useMemo(
     () => SUBDEPT_RESTRICTED_ROLES.includes(form.role),
     [form.role]
@@ -58,8 +57,7 @@ export const useUserFormModal = ({
     [form.role]
   );
 
-  // Form validation
-  const formValid = useMemo(
+  const createFormValid = useMemo(
     () =>
       Boolean(
         form.username?.trim() &&
@@ -70,13 +68,41 @@ export const useUserFormModal = ({
     [form.username, form.userId, form.role, form.subDepts, subDeptsMandatory]
   );
 
-  // Selected IDs derived from form state
-  const selectedSubDeptIds = useMemo(
-    () => form.subDepts.map((sd: any) => sd.subDepartmentId),
-    [form.subDepts]
+  const updateFormValid = useMemo(
+    () =>
+      Boolean(
+        form.username?.trim() &&
+          form.role &&
+          (subDeptsMandatory ? form.subDepts.length > 0 : true)
+      ),
+    [form.username, form.role, form.subDepts, subDeptsMandatory]
   );
 
-  // Filtered list based on search query
+  const hasCommittedChanges = useMemo(() => {
+    if (!editTarget) return true;
+    const currentUsername = String(form.username ?? "").trim();
+    const originalUsername = String(editTarget?.username ?? "").trim();
+    const usernameChanged = currentUsername !== originalUsername;
+
+    const currentSubDeptIds = normalizeSubDeptIds(form.subDepts);
+    const originalSubDeptIds = normalizeSubDeptIds(editTarget?.subDepartments);
+    const subDeptChanged =
+      currentSubDeptIds.length !== originalSubDeptIds.length ||
+      currentSubDeptIds.some((id, idx) => id !== originalSubDeptIds[idx]);
+
+    return usernameChanged || subDeptChanged;
+  }, [editTarget, form.username, form.subDepts]);
+
+  const canSubmit = useMemo(
+    () => (editTarget ? updateFormValid && hasCommittedChanges : createFormValid),
+    [editTarget, updateFormValid, hasCommittedChanges, createFormValid]
+  );
+
+  const pendingSubDeptIds = useMemo(
+    () => pendingSubDepts.map((sd: any) => sd.subDepartmentId),
+    [pendingSubDepts]
+  );
+
   const filteredDepts = useMemo(() => {
     if (!search.trim()) return availableSubDepts || [];
     return (availableSubDepts || []).filter((sd: any) =>
@@ -84,22 +110,33 @@ export const useUserFormModal = ({
     );
   }, [availableSubDepts, search]);
 
-  // Toggle a single sub-dept
-  const handleToggleDept = useCallback(
-    (sd: any) => {
-      const exists = selectedSubDeptIds.includes(sd.subDepartmentId);
-      onSubDeptsChange(
-        exists
-          ? form.subDepts.filter(
-              (s: any) => s.subDepartmentId !== sd.subDepartmentId
-            )
-          : [...form.subDepts, sd]
-      );
-    },
-    [selectedSubDeptIds, form.subDepts, onSubDeptsChange]
-  );
+  const handleOpenSelector = useCallback(() => {
+    setPendingSubDepts([...form.subDepts]);
+    setSelectorOpen(true);
+  }, [form.subDepts]);
 
-  // Remove a single sub-dept from selected list
+  const handleCommitSelector = useCallback(() => {
+    onSubDeptsChange(pendingSubDepts);
+    setSelectorOpen(false);
+    setSearch("");
+    setPendingSubDepts([]);
+  }, [pendingSubDepts, onSubDeptsChange]);
+
+  const handleCancelSelector = useCallback(() => {
+    setSelectorOpen(false);
+    setSearch("");
+    setPendingSubDepts([]);
+  }, []);
+
+  const handleToggleDept = useCallback((sd: any) => {
+    setPendingSubDepts((prev) => {
+      const exists = prev.some((s: any) => s.subDepartmentId === sd.subDepartmentId);
+      return exists
+        ? prev.filter((s: any) => s.subDepartmentId !== sd.subDepartmentId)
+        : [...prev, sd];
+    });
+  }, []);
+
   const handleRemoveSubDept = useCallback(
     (id: number) => {
       onSubDeptsChange(
@@ -109,37 +146,29 @@ export const useUserFormModal = ({
     [form.subDepts, onSubDeptsChange]
   );
 
-  // Clear all selected sub-depts
-  const handleClearAll = useCallback(() => {
-    onSubDeptsChange([]);
-  }, [onSubDeptsChange]);
-
-  // Toggle selector open/close
-  const handleToggleSelector = useCallback(() => {
-    setSelectorOpen((prev) => {
-      if (prev) setSearch("");
-      return !prev;
-    });
+  const handleClearPending = useCallback(() => {
+    setPendingSubDepts([]);
   }, []);
 
   return {
-    // State
     selectorOpen,
     search,
     setSearch,
     selectorMaxHeight,
-
-    // Derived flags
     subDeptsRestricted,
     subDeptsMandatory,
-    formValid,
-    selectedSubDeptIds,
+    createFormValid,
+    updateFormValid,
+    hasCommittedChanges,
+    canSubmit,
+    pendingSubDeptIds,
+    pendingSubDepts,
     filteredDepts,
-
-    // Handlers
+    handleOpenSelector,
+    handleCommitSelector,
+    handleCancelSelector,
     handleToggleDept,
     handleRemoveSubDept,
-    handleClearAll,
-    handleToggleSelector,
+    handleClearPending,
   };
 };

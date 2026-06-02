@@ -38,5 +38,7 @@ export const updateProject = (payload: any) =>
  * Delete project
  */
 export const deleteProject = (projectId: string) =>
-  del(ADMIN_ENDPOINTS.PROJECT.DELETE, { projectId });
+  del(ADMIN_ENDPOINTS.PROJECT.DELETE, {
+    data: { projectId },
+  });
 

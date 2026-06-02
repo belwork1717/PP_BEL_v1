@@ -4,9 +4,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Box, Button, Stack, Typography } from "@mui/material";
 import RawMaterialPrepFlowBar from "./RawMaterialPrepFlowBar";
 import RawMaterialPremixSchemaPanel from "./RawMaterialPremixSchemaPanel";
+import RemoveProcessButton from "../../../../components/common/RemoveProcessButton";
 import { STRINGS } from "../../../../../app/config/strings";
 import { icons } from "../../../../../app/theme/icons";
 import { DEFAULT_SELECTED_PROCESSES, materialRequiresGradeSelection } from "../../../../../hooks/user/manufacturing/rawMaterialPrepFlowConfig";
+import { SOLID_PREP_BRAND } from "../../../../../app/theme/custom_themes/user/manufacturing/rawMaterialPreparation_theme";
 import type { RawMaterialPrepPremixSession } from "../../../../../data/models/user/RawMaterialPreparationModel";
 import type { MaterialsListItem } from "../../../../../data/models/user/MaterialsListModel";
 
@@ -34,6 +36,7 @@ const RawMaterialBuilderForm = ({
   addedPremixSelections,
   premixSessions,
   onPremixSlotChange,
+  onDeletePremixSelection,
   subDepartmentId,
   theme,
   handleBack,
@@ -136,6 +139,39 @@ const RawMaterialBuilderForm = ({
           </Box>
 
           <Box
+            sx={{
+              border: `1px solid ${theme.palette.border}`,
+              borderRadius: 2,
+              px: 1,
+              py: 1,
+              background: theme.palette.surface,
+            }}
+          >
+            <Typography sx={{ fontSize: "0.76rem", fontWeight: 700, color: theme.palette.primary, mb: 0.4 }}>
+              Premix Navigation
+            </Typography>
+            <Typography sx={{ fontSize: "0.72rem", color: theme.palette.textSub, mb: 0.9 }}>
+              Click any premix tab below to open that premix card and continue filling its process details.
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ overflowX: "auto", pb: 0.5 }}>
+              {premixCards.map((entry: any, idx: number) => {
+                const active = idx === activePremixIndex;
+                return (
+                  <Button
+                    key={`premix-tab-${entry.premix}`}
+                    size="small"
+                    variant={active ? "contained" : "outlined"}
+                    onClick={() => setActivePremixIndex(idx)}
+                    sx={{ whiteSpace: "nowrap", flexShrink: 0, textTransform: "none" }}
+                  >
+                    Premix {entry.premix}
+                  </Button>
+                );
+              })}
+            </Stack>
+          </Box>
+
+          <Box
             key={activePremixEntry.premix}
             sx={{
               borderRadius: 2.5,
@@ -145,9 +181,16 @@ const RawMaterialBuilderForm = ({
               py: 1.25,
             }}
           >
-            <Typography sx={{ fontSize: "0.8rem", fontWeight: 700, color: theme.palette.primary }}>
-              Premix - {activePremixEntry.premix}
-            </Typography>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography sx={{ fontSize: "0.8rem", fontWeight: 700, color: theme.palette.primary }}>
+                Premix - {activePremixEntry.premix}
+              </Typography>
+              <RemoveProcessButton
+                onClick={() => onDeletePremixSelection(activePremixEntry.premix)}
+                dangerColor={rmTheme.solidPreparation?.brand?.danger ?? SOLID_PREP_BRAND.danger}
+                tooltip={RM.DELETE_PREMIX_TOOLTIP}
+              />
+            </Stack>
             <Stack spacing={0.4} mt={0.75}>
               {activePremixEntry.selectedProcesses?.solid && (
                 <Typography sx={{ fontSize: "0.78rem", color: theme.palette.text }}>
@@ -199,38 +242,6 @@ const RawMaterialBuilderForm = ({
             )}
           </Box>
 
-          <Box
-            sx={{
-              border: `1px solid ${theme.palette.border}`,
-              borderRadius: 2,
-              px: 1,
-              py: 1,
-              background: theme.palette.surface,
-            }}
-          >
-            <Typography sx={{ fontSize: "0.76rem", fontWeight: 700, color: theme.palette.primary, mb: 0.4 }}>
-              Premix Navigation
-            </Typography>
-            <Typography sx={{ fontSize: "0.72rem", color: theme.palette.textSub, mb: 0.9 }}>
-              Click any premix tab below to open that premix card and continue filling its process details.
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ overflowX: "auto", pb: 0.5 }}>
-              {premixCards.map((entry: any, idx: number) => {
-                const active = idx === activePremixIndex;
-                return (
-                  <Button
-                    key={`premix-tab-${entry.premix}`}
-                    size="small"
-                    variant={active ? "contained" : "outlined"}
-                    onClick={() => setActivePremixIndex(idx)}
-                    sx={{ whiteSpace: "nowrap", flexShrink: 0, textTransform: "none" }}
-                  >
-                    Premix {entry.premix}
-                  </Button>
-                );
-              })}
-            </Stack>
-          </Box>
         </Stack>
       )}
 

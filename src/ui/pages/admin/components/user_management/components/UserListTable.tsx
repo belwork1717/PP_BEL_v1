@@ -97,6 +97,9 @@ const UserListTable = ({
                 const name = getDisplayName(user);
                 const dept = getDept(user);
                 const dc = getDeptConfig(dept, departments);
+                const normalizedRole = String(user?.role ?? "").trim().toLowerCase();
+                const showNotApplicableSubDepartments =
+                  normalizedRole === "admin" || normalizedRole === "system manager";
 
                 return (
                   <TableRow key={user.id} sx={table.row}>
@@ -123,10 +126,14 @@ const UserListTable = ({
                     </TableCell> */}
 
                     <TableCell sx={table.cellSubDepts}>
-                      <SubDeptChips
-                        subDepts={getSubDepts(user)}
-                        chipSx={tableCell.subDeptChip}
-                      />
+                      {showNotApplicableSubDepartments ? (
+                        <Chip label="Not Applicable" size="small" sx={tableCell.subDeptChip} />
+                      ) : (
+                        <SubDeptChips
+                          subDepts={getSubDepts(user)}
+                          chipSx={tableCell.subDeptChip}
+                        />
+                      )}
                     </TableCell>
 
                     <TableCell sx={table.cell}>

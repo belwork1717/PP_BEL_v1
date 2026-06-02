@@ -63,10 +63,10 @@ export const userManagementController = {
   createUser: async (form: any) => {
     try {
       const finalPayload = {
-        username: form.username,
         userId: form.userId,
-        role: form.role,
-        subDepartments: form.subDepartments,
+        username: form.username,
+        roleId: form.roleId,
+        subDepartmentIds: form.subDepartmentIds,
       };
       const response = await createUser(finalPayload);
       return new ApiResponseModel(response);

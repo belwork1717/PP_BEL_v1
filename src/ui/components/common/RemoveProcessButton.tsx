@@ -18,7 +18,7 @@ const RemoveProcessButton = ({ onClick, dangerColor, tooltip }: Props) => {
         onClick={onClick}
         sx={{ color: dangerColor, "&:hover": { background: alpha(dangerColor, 0.08) } }}
       >
-        <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+          <DeleteOutlineRoundedIcon sx={{ fontSize: 20, color: "inherit" }} />
       </IconButton>
     </Tooltip>
   );

@@ -36,3 +36,15 @@ export type {
   PreparationPremixEntry,
   PreparationProcessEntry,
 } from "./adapters/rawMaterialPreparation.adapter";
+
+export {
+  MOCK_TRIAL_SCHEMA_FUNCTIONALITY,
+  MOCK_TRIAL_SCHEMA_TYPE,
+  MOCK_TRIAL_SCHEMA_VERSION,
+  rocketMotorCasingMockTrialSchemaFetchConfig,
+  buildMockTrialSchemaRequest,
+  buildMockTrialSectionPayload,
+  hydrateMockTrialValuesFromSections,
+  createMockTrialInitialValues,
+  parseMockTrialSavedSections,
+} from "./adapters/rocketMotorCasingMockTrial.adapter";

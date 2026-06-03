@@ -31,24 +31,39 @@ const SchemaFormRenderer = ({
     onChange({ ...values, [sectionId]: [row] });
   };
 
+  const isMockTrial = schema.schemaType === "MOCK_TRIAL";
+
   return (
     <Stack spacing={2}>
-      <Box sx={{ borderRadius: 2, border: `1px solid ${alpha(theme.border, 0.7)}`, p: 1.5 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: "0.9rem", mb: 0.5 }}>
-          {schema.rawMaterialDetails.materialName} ({schema.rawMaterialDetails.materialCode})
-        </Typography>
-        {schema.rawMaterialDetails.grade?.gradeName ? (
-          <Typography sx={{ fontSize: "0.72rem", color: theme.textSub }}>
-            Grade: {schema.rawMaterialDetails.grade.gradeName}
+      {!isMockTrial ? (
+        <Box sx={{ borderRadius: 2, border: `1px solid ${alpha(theme.border, 0.7)}`, p: 1.5 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: "0.9rem", mb: 0.5 }}>
+            {schema.rawMaterialDetails.materialName} ({schema.rawMaterialDetails.materialCode})
           </Typography>
-        ) : null}
-      </Box>
+          {schema.rawMaterialDetails.grade?.gradeName ? (
+            <Typography sx={{ fontSize: "0.72rem", color: theme.textSub }}>
+              Grade: {schema.rawMaterialDetails.grade.gradeName}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : schema.formDetails?.title || schema.formDetails?.description ? (
+        <Box sx={{ borderRadius: 2, border: `1px solid ${alpha(theme.border, 0.7)}`, p: 1.5 }}>
+          {schema.formDetails?.title ? (
+            <Typography sx={{ fontWeight: 700, fontSize: "0.9rem" }}>{schema.formDetails.title}</Typography>
+          ) : null}
+          {schema.formDetails?.description ? (
+            <Typography sx={{ fontSize: "0.72rem", color: theme.textSub, mt: 0.35 }}>
+              {schema.formDetails.description}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : null}
 
       {schema.sections.map((section) => {
         const sectionRows = (values[section.sectionId] ?? []) as Record<string, unknown>[];
         const isNested = hasNestedGroup(section);
         const isForm = section.type === "form";
-        const isTable = section.type === "table";
+        const isTable = section.type === "table" || section.type === "complex-table";
         const isDynamicGroup = section.type === "dynamic-group" && !isNested;
 
         return (

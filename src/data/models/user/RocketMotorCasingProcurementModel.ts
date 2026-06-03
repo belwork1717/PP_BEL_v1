@@ -1,4 +1,4 @@
-import { INITIAL_ROCKET_FORM, RocketFormData } from "../../../hooks/user/sourcing/sourcingWorkflowData";
+import { INITIAL_ROCKET_FORM, RocketFormData, type RocketMotorBatch } from "../../../hooks/user/sourcing/sourcingWorkflowData";
 import { OPERATION_STATUS, type OperationStatus } from "../../../hooks/operationStatus";
 import {
   EPDM_MECH_KEYS,
@@ -79,6 +79,53 @@ export function normalizeRocketCasingListStatus(status: string): OperationStatus
   return OPERATION_STATUS.INITIATED;
 }
 
+/** Column keys searched by the rocket motor casing list search bar */
+export const ROCKET_MOTOR_CASING_SEARCH_FIELDS = [
+  "motorCasingId",
+  "projectId",
+  "motorId",
+  "motorStage",
+  "casingType",
+  "insulationType",
+  "createdBy.fullName",
+  "createdBy.id",
+  "createdOn",
+  "rmStatus",
+] as const;
+
+/** Match list row against free-text search across all visible table columns */
+export function rocketMotorCasingMatchesSearch(row: RocketMotorBatch, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const parts: string[] = [
+    row.motorCasingId ?? "",
+    row.projectId ?? "",
+    row.motorId,
+    row.motorNo ?? "",
+    row.motorStage ?? "",
+    row.casingType ?? "",
+    row.insulationType ?? "",
+    row.rmStatus,
+    row.createdBy?.fullName ?? "",
+    row.createdBy?.id ?? "",
+    row.assignedTo?.fullName ?? "",
+  ];
+
+  if (row.createdOn) {
+    parts.push(row.createdOn);
+    const d = new Date(row.createdOn);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(
+        d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+      );
+    }
+  }
+
+  return parts.some((part) => String(part).toLowerCase().includes(q));
+}
+
 export class RocketMotorCasingSubmitResponseModel {
   formId: string;
   procurementId: string;
@@ -113,6 +160,8 @@ export class RocketMotorCasingDetailsModel {
   projectId: string;
   subDepartmentId: number;
   motorStage: string;
+  motorId: string;
+  /** @deprecated API alias — same as motorId */
   motorNo: string;
   motorCasingId: string;
   status: string;
@@ -123,7 +172,8 @@ export class RocketMotorCasingDetailsModel {
     this.projectId = String(payload?.projectId ?? "");
     this.subDepartmentId = Number(payload?.subDepartmentId ?? 0);
     this.motorStage = String(payload?.motorStage ?? "");
-    this.motorNo = String(payload?.motorNo ?? "");
+    this.motorId = String(payload?.motorId ?? payload?.motorNo ?? "");
+    this.motorNo = this.motorId;
     this.motorCasingId = String(payload?.motorCasingId ?? "");
     this.status = String(payload?.status ?? "");
     this.sections = (payload?.sections && typeof payload.sections === "object" ? payload.sections : {}) as Record<
@@ -139,7 +189,7 @@ export class RocketMotorCasingDetailsModel {
   static toFormData(model: RocketMotorCasingDetailsModel): RocketFormData {
     return mergeApiSectionsIntoFormData(model.sections, {
       motorStage: model.motorStage,
-      motorNo: model.motorNo,
+      motorId: model.motorId,
       motorCasingId: model.motorCasingId,
     });
   }
@@ -148,7 +198,7 @@ export class RocketMotorCasingDetailsModel {
     return parseSectionsToFormData(model.sections, {
       projectId: model.projectId,
       motorStage: model.motorStage,
-      motorNo: model.motorNo,
+      motorId: model.motorId,
       motorCasingId: model.motorCasingId,
     });
   }
@@ -174,7 +224,7 @@ const firstMech = (sections: Record<string, unknown>, name: string) => {
 
 export function mergeApiSectionsIntoFormData(
   sections: Record<string, unknown>,
-  ids: { motorStage?: string; motorNo?: string; motorCasingId?: string }
+  ids: { motorStage?: string; motorId?: string; motorCasingId?: string }
 ): RocketFormData {
   const mr = (sections.motorReceipt ?? {}) as Record<string, unknown>;
   const items = (mr.itemsReceived ?? {}) as Record<string, unknown>;
@@ -211,7 +261,7 @@ export function mergeApiSectionsIntoFormData(
     ...INITIAL_ROCKET_FORM,
     motorCasingId: ids.motorCasingId ?? "",
     motorStageApi: ids.motorStage ?? "",
-    motorNoApi: ids.motorNo ?? "",
+    motorNoApi: ids.motorId ?? "",
     casingType: String(mr.casingType ?? "COMPOSITE"),
     receivingDate: String(mr.receivingDate ?? "").slice(0, 10),
     itemsDescription: String(items.description ?? ""),
@@ -572,7 +622,10 @@ export function mapCasingFormDataToDetailBlocks(form: RocketMotorCasingFormData)
       rows: [
         detailRow("Project ID", form.projectId),
         detailRow("Motor stage", form.motorStageApi),
-        detailRow("Motor no.", form.motorNoApi),
+        detailRow("Motor ID", form.motorId),
+        ...(form.motorCasingId
+          ? [detailRow("Motor casing ID", form.motorCasingId)]
+          : []),
         detailRow("Casing type", form.casingType),
         detailRow("Receiving date", form.receivingDate),
         detailRow("Item type / description", form.itemsDescription),

@@ -44,17 +44,29 @@ const normalizeField = (field: SchemaField): SchemaField => {
   return field;
 };
 
-const normalizeSection = (section: SchemaSection): SchemaSection => ({
-  ...section,
-  defaultRows: section.defaultRows?.map((row) => normalizeDefaultRow(row as Record<string, unknown>)),
-  fields: section.fields?.map(normalizeField),
-  lots: section.lots
-    ? { fields: section.lots.fields?.map(normalizeField) ?? [] }
-    : undefined,
-  drums: section.drums
-    ? { fields: section.drums.fields?.map(normalizeField) ?? [] }
-    : undefined,
-});
+const flattenSectionColumns = (section: SchemaSection): SchemaSection["columns"] => {
+  const base = section.columns ?? [];
+  const grouped =
+    section.groupedColumns?.flatMap((group) => group.columns ?? []) ?? [];
+  return [...base, ...grouped];
+};
+
+const normalizeSection = (section: SchemaSection): SchemaSection => {
+  const sectionType = section.type === "complex-table" ? "table" : section.type;
+  return {
+    ...section,
+    type: sectionType,
+    columns: flattenSectionColumns(section),
+    defaultRows: section.defaultRows?.map((row) => normalizeDefaultRow(row as Record<string, unknown>)),
+    fields: section.fields?.map(normalizeField),
+    lots: section.lots
+      ? { fields: section.lots.fields?.map(normalizeField) ?? [] }
+      : undefined,
+    drums: section.drums
+      ? { fields: section.drums.fields?.map(normalizeField) ?? [] }
+      : undefined,
+  };
+};
 
 const resolveSchemaSections = (outer: Record<string, unknown>, inner: Record<string, unknown>) => {
   if (Array.isArray(outer.sections)) return outer.sections as SchemaSection[];
@@ -70,10 +82,16 @@ export const normalizeSchemaDocument = (payload: unknown): SchemaDocument | null
   const details = (outerData.rawMaterialDetails ??
     innerData.rawMaterialDetails) as SchemaDocument["rawMaterialDetails"] | undefined;
   const sections = resolveSchemaSections(outerData, innerData);
+  const schemaType = String(root.schemaType ?? outerData.schemaType ?? "RAW_MATERIALS");
+  const isMockTrial = schemaType === "MOCK_TRIAL";
+  const formDetails = (outerData.formDetails ?? innerData.formDetails) as
+    | { title?: string; description?: string }
+    | undefined;
 
-  if (!details?.materialCode || sections.length === 0) return null;
+  if (sections.length === 0) return null;
+  if (!isMockTrial && !details?.materialCode) return null;
 
-  const grade = details.grade
+  const grade = details?.grade
     ? {
         gradeId: Number((details.grade as SchemaDocument["rawMaterialDetails"]["grade"])?.gradeId ?? 0),
         gradeCode: String((details.grade as { gradeCode?: string })?.gradeCode ?? "").trim(),
@@ -81,18 +99,34 @@ export const normalizeSchemaDocument = (payload: unknown): SchemaDocument | null
       }
     : null;
 
+  const rawMaterialDetails: SchemaDocument["rawMaterialDetails"] = isMockTrial
+    ? {
+        materialId: 0,
+        materialCode: "MOCK_TRIAL",
+        materialName: String(formDetails?.title ?? "Mock Trial").trim(),
+        materialType: "MOCK_TRIAL",
+        grade: null,
+      }
+    : {
+        materialId: Number(details!.materialId ?? 0),
+        materialCode: String(details!.materialCode ?? "").trim(),
+        materialName: String(details!.materialName ?? "").trim(),
+        materialType: String(details!.materialType ?? "").trim(),
+        grade,
+      };
+
   return {
     schemaVersion: String(root.schemaVersion ?? outerData.schemaVersion ?? "1.0"),
-    schemaType: String(root.schemaType ?? outerData.schemaType ?? "RAW_MATERIALS"),
+    schemaType,
     functionality: String(root.functionality ?? outerData.functionality ?? ""),
     layout: (innerData.layout as { type: string }) ?? { type: "flat" },
-    rawMaterialDetails: {
-      materialId: Number(details.materialId ?? 0),
-      materialCode: String(details.materialCode ?? "").trim(),
-      materialName: String(details.materialName ?? "").trim(),
-      materialType: String(details.materialType ?? "").trim(),
-      grade,
-    },
+    formDetails: formDetails
+      ? {
+          title: String(formDetails.title ?? "").trim() || undefined,
+          description: String(formDetails.description ?? "").trim() || undefined,
+        }
+      : undefined,
+    rawMaterialDetails,
     sections: sections.map(normalizeSection),
   };
 };

@@ -82,6 +82,13 @@ export function mapToAppError(error: unknown) {
         details: typeof data === "object" && data !== null && "error" in data ? (data as { error: unknown }).error : null,
       });
 
+    case HTTP_STATUS.METHOD_NOT_ALLOWED:
+      return new AppError({
+        status,
+        message: backendMessage(data) ?? STRINGS.SYSTEM.INVALID_REQUEST,
+        details: typeof data === "object" && data !== null && "error" in data ? (data as { error: unknown }).error : null,
+      });
+
     case HTTP_STATUS.TOO_MANY_REQUESTS:
       return new AppError({
         status,

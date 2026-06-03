@@ -72,15 +72,14 @@ const RocketMotorCasingDetailsView = ({ row, blocks, loading, onBack }: RocketMo
       Object.fromEntries(
         Object.entries(STATUS_CONFIG).map(([status, cfg]) => [
           status,
-          { ...cfg, ...theme.batchList.statusConfig[status] },
+          { ...cfg, ...dt.bannerStatusConfig[status] },
         ])
       ),
-    [theme]
+    [dt]
   );
 
   const metaFields = [
     { label: BL.COL_MOTOR_CASING_ID, value: row.motorCasingId },
-    { label: BL.COL_PROCUREMENT_ID, value: row.formId || row.procurementId || "—" },
     { label: "Project ID", value: row.projectId || "—" },
     { label: BL.COL_MOTOR_ID, value: row.motorNo || "—" },
     { label: BL.COL_MOTOR_TYPE, value: row.motorStage || "—" },

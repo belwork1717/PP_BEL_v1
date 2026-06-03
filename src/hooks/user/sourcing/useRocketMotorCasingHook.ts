@@ -16,7 +16,6 @@ import {
   type CasingDetailBlock,
   type RocketMotorCasingDetailsContext,
   serializeCasingForm,
-  isCasingFormComplete,
   canSaveCasingDraft,
   validateCasingFormForSubmit,
   type RocketMotorCasingFormData,
@@ -36,8 +35,11 @@ type FormEntryMode = "create" | "fill" | "edit";
 
 const shouldUseCreateEndpoint = (batch: RocketMotorBatch | null) => {
   if (!batch) return false;
-  const noIds = !String(batch.procurementId ?? "").trim() && !String(batch.formId ?? "").trim();
-  return batch.rmStatus === OPERATION_STATUS.INITIATED && noIds;
+  const noPersistedCasing =
+    !String(batch.motorCasingId ?? "").trim() &&
+    !String(batch.procurementId ?? "").trim() &&
+    !String(batch.formId ?? "").trim();
+  return batch.rmStatus === OPERATION_STATUS.INITIATED && noPersistedCasing;
 };
 
 export const useRocketMotorCasingHook = () => {
@@ -136,7 +138,8 @@ export const useRocketMotorCasingHook = () => {
               procurementId: detailsModel.formId || prev.procurementId,
               motorCasingId: detailsModel.motorCasingId || prev.motorCasingId,
               motorStage: detailsModel.motorStage || prev.motorStage,
-              motorNo: detailsModel.motorNo || prev.motorNo,
+              motorNo: detailsModel.motorId || prev.motorNo,
+              motorId: detailsModel.motorId || prev.motorId,
               motorType: detailsModel.motorStage || prev.motorType,
               rmStatus: normalizeRocketCasingListStatus(detailsModel.status),
             }
@@ -251,9 +254,10 @@ export const useRocketMotorCasingHook = () => {
     if (!shouldFetchDetails) {
       resolvedForm = {
         ...resolvedForm,
+        projectId: String(batch.projectId ?? ""),
         motorCasingId: String(batch.motorCasingId ?? ""),
         motorStageApi: String(batch.motorStage ?? ""),
-        motorNoApi: String(batch.motorNo ?? ""),
+        motorId: String(batch.motorId ?? batch.motorNo ?? ""),
       };
     } else {
       const motorCasingId = String(batch.motorCasingId ?? "").trim();
@@ -281,7 +285,8 @@ export const useRocketMotorCasingHook = () => {
         ...resolvedBatch,
         motorCasingId: detailsModel.motorCasingId || resolvedBatch.motorCasingId,
         motorStage: detailsModel.motorStage || resolvedBatch.motorStage,
-        motorNo: detailsModel.motorNo || resolvedBatch.motorNo,
+        motorNo: detailsModel.motorId || resolvedBatch.motorNo,
+        motorId: detailsModel.motorId || resolvedBatch.motorId,
         motorType: detailsModel.motorStage || resolvedBatch.motorType,
       };
     }
@@ -299,7 +304,7 @@ export const useRocketMotorCasingHook = () => {
 
   const batchToDetailsContext = (batch: RocketMotorBatch): RocketMotorCasingDetailsContext => ({
     formId: String(batch.formId ?? batch.procurementId ?? ""),
-    projectId: "",
+    projectId: String(batch.projectId ?? ""),
     motorCasingId: String(batch.motorCasingId ?? batch.batchId ?? ""),
     procurementId: String(batch.procurementId ?? batch.formId ?? ""),
     motorStage: String(batch.motorStage ?? batch.motorType ?? ""),
@@ -308,7 +313,7 @@ export const useRocketMotorCasingHook = () => {
     insulationType: String(batch.insulationType ?? ""),
     receivingDate: String(batch.receivingDate ?? ""),
     rmStatus: batch.rmStatus,
-    createdBy: batch.assignedTo ? { fullName: batch.assignedTo.fullName } : null,
+    createdBy: batch.createdBy ?? (batch.assignedTo ? { id: "", fullName: batch.assignedTo.fullName } : null),
     createdOn: batch.createdOn,
     rejectionReason: batch.rejectionReason,
   });
@@ -349,7 +354,7 @@ export const useRocketMotorCasingHook = () => {
         motorCasingId: detailsModel.motorCasingId || motorCasingId,
         procurementId: String(batch.procurementId ?? detailsModel.formId ?? ""),
         motorStage: detailsModel.motorStage || batch.motorStage || "",
-        motorNo: detailsModel.motorNo || batch.motorNo || "",
+        motorNo: detailsModel.motorId || detailsModel.motorNo || batch.motorNo || batch.motorId || "",
         casingType: formData.casingType || String(batch.casingType ?? batch.batchType ?? ""),
         insulationType: formData.insulationType || String(batch.insulationType ?? ""),
         receivingDate: formData.receivingDate || String(batch.receivingDate ?? ""),
@@ -445,21 +450,37 @@ export const useRocketMotorCasingHook = () => {
       return false;
     }
 
+    const isCreateFlow = shouldUseCreateEndpoint(activeBatch);
     const submissionType = intent === "draft" ? "DRAFT" : "SUBMIT";
-    const validationError = validateCasingFormForSubmit(casingForm, submissionType);
+
+    const validationError = validateCasingFormForSubmit(casingForm, "DRAFT");
     if (validationError) {
       showAlert(validationError, "warning");
       return false;
     }
 
-    const payload = buildCasingFormPayload(casingForm, subDepartmentId, submissionType);
-    const isCreateFlow = shouldUseCreateEndpoint(activeBatch);
+    const resolvedMotorCasingId = String(
+      casingForm.motorCasingId || activeBatch.motorCasingId || ""
+    ).trim();
+
+    if (!isCreateFlow && !resolvedMotorCasingId) {
+      showAlert(STRINGS.SOURCING.CASING_FORM.BATCH_ID_MISSING, "error");
+      return false;
+    }
+
+    const payload = buildCasingFormPayload(casingForm, subDepartmentId, submissionType, {
+      includeMotorCasingId: !isCreateFlow,
+      motorCasingId: resolvedMotorCasingId,
+    });
 
     setActionLoading(true);
     try {
       const response = isCreateFlow
         ? await rocketMotorCasingController.createForm(payload)
-        : await rocketMotorCasingController.updateForm(payload);
+        : await rocketMotorCasingController.updateForm({
+            ...payload,
+            motorCasingId: resolvedMotorCasingId,
+          });
 
       if (!response?.success) {
         const fallback = isCreateFlow
@@ -480,24 +501,27 @@ export const useRocketMotorCasingHook = () => {
             ? STRINGS.SOURCING.CASING_FORM.CREATE_SUBMIT_SUCCESS
             : STRINGS.SOURCING.CASING_FORM.UPDATE_SUBMIT_SUCCESS);
 
-      if (!isCreateFlow && intent === "draft") {
+      if (intent === "draft") {
         const motorCasingId = String(
           data?.motorCasingId || casingForm.motorCasingId || activeBatch.motorCasingId || ""
         ).trim();
-        setActiveBatch((prev) =>
-          prev
-            ? {
-                ...prev,
-                formId: data?.formId ?? prev.formId,
-                procurementId: data?.procurementId ?? data?.formId ?? prev.procurementId,
-                motorCasingId: motorCasingId || prev.motorCasingId,
-                rmStatus: data?.status ? (data.status as typeof prev.rmStatus) : prev.rmStatus,
-              }
-            : prev
-        );
-        const reloaded = await reloadCasingFormDetails(motorCasingId);
-        if (reloaded) stayOnFormWithDraftSuccess(successMessage);
-        return reloaded;
+        if (motorCasingId) {
+          setActiveBatch((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  formId: data?.formId ?? prev.formId,
+                  procurementId: data?.procurementId ?? data?.formId ?? prev.procurementId,
+                  motorCasingId: motorCasingId || prev.motorCasingId,
+                  motorId: casingForm.motorId || prev.motorId,
+                  rmStatus: data?.status ? (data.status as typeof prev.rmStatus) : prev.rmStatus,
+                }
+              : prev
+          );
+          const reloaded = await reloadCasingFormDetails(motorCasingId);
+          if (reloaded) stayOnFormWithDraftSuccess(successMessage);
+          return reloaded;
+        }
       }
 
       returnToListWithSuccess(successMessage);
@@ -592,8 +616,8 @@ export const useRocketMotorCasingHook = () => {
     }
   }, [deleteTargetMotorCasingId, deleteLoading, listParams, resolveCasingErrorMessage, showAlert, view]);
 
-  const canSubmit = useMemo(() => isCasingFormComplete(casingForm), [casingForm]);
   const canSaveDraft = useMemo(() => canSaveCasingDraft(casingForm), [casingForm]);
+  const canSubmit = canSaveDraft;
 
   const canDeleteActiveCasing =
     formEntryMode !== "create" && canDeleteRocketMotorCasing(activeBatch?.rmStatus);
@@ -619,6 +643,7 @@ export const useRocketMotorCasingHook = () => {
     isDimensionalParamsLoading,
     fetchingMotorParams,
     resolvedMotorStage,
+    subDepartmentId: subDepartmentId ?? 0,
     lookups,
     backConfirmOpen,
     deleteConfirmOpen,

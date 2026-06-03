@@ -172,6 +172,23 @@ export const put = async (
 };
 
 /**
+ * PATCH
+ */
+export const patch = async (
+  url: string,
+  payload = {},
+  options: object = {}
+) => {
+  const response = await api.request({
+    method: "PATCH",
+    url,
+    data: payload,
+    ...options,
+  });
+  return response.data;
+};
+
+/**
  * DELETE
  */
 export const del = async (url: string, options: object = {}) => {

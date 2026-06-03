@@ -226,6 +226,7 @@ export const USER_RAW_MATERIAL_PREPARATION_ENDPOINTS = {
   FORM_DETAILS: `${API_BASE}/user/raw-material-preparation/form/details`,
   UPDATE_FORM: `${API_BASE}/user/raw-material-preparation/form/update`,
   SCHEMA_RAW_MATERIAL: `${API_BASE}/user/raw-material-preparation/schema/raw-material`,
+  SCHEMA_MOCK_TRIAL: `${API_BASE}/user/raw-material-preparation/schema/mock-trial`,
 };
 
 export const USER_CASE_PREPARATION_ENDPOINTS = {

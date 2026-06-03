@@ -12,6 +12,7 @@ import {
 import type { SchemaSection, SchemaThemeTokens } from "../../models/schema.types";
 import { isPresetTableCell } from "../../models/schemaFormState";
 import { cloneSchemaRow } from "../../models/schemaFormState";
+import { applyFormulaColumns } from "../../utils/formulaEval";
 
 type TableSectionProps = {
   section: SchemaSection;
@@ -28,14 +29,22 @@ const TableSection = ({ section, rows, onRowsChange, readOnly = false, theme }: 
       : (section.defaultRows ?? []).map((r) => cloneSchemaRow(r as Record<string, unknown>));
 
   const updateRowField = (rowIdx: number, key: string, value: string) => {
-    const next = displayRows.map((row, idx) =>
-      idx === rowIdx ? { ...(row ?? {}), [key]: value } : row
-    );
+    const next = displayRows.map((row, idx) => {
+      if (idx !== rowIdx) return row;
+      const updated = applyFormulaColumns(
+        { ...(row ?? {}), [key]: value },
+        section.columns ?? []
+      );
+      return updated;
+    });
     onRowsChange(next);
   };
 
   const addRow = () => {
-    onRowsChange([...displayRows, {}]);
+    onRowsChange([
+      ...displayRows,
+      applyFormulaColumns({ srNo: displayRows.length + 1 }, section.columns ?? []),
+    ]);
   };
 
   return (
@@ -63,12 +72,13 @@ const TableSection = ({ section, rows, onRowsChange, readOnly = false, theme }: 
                     );
                   }
 
+                  const isFormulaCol = col.type === "formula" || Boolean(col.formula?.expression);
                   const presetCell = isPresetTableCell(
                     section.sectionId,
                     col.key,
                     row as Record<string, unknown>
                   );
-                  if (presetCell || col.readonly || readOnly) {
+                  if (presetCell || col.readonly || isFormulaCol || readOnly) {
                     const displayText =
                       col.key === "setParameter"
                         ? String(
@@ -99,7 +109,7 @@ const TableSection = ({ section, rows, onRowsChange, readOnly = false, theme }: 
                         size="small"
                         fullWidth
                         type={
-                          col.type === "number"
+                          col.type === "number" || col.type === "measurement"
                             ? "number"
                             : col.type === "datetime"
                               ? "datetime-local"

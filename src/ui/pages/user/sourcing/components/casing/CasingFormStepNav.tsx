@@ -14,6 +14,7 @@ type CasingFormStepNavProps = {
   canGoNext: boolean;
   isLastStep: boolean;
   stepError: string | null;
+  nextDisabledHint?: string | null;
   onBack: () => void;
   onNext: () => void;
   theme: any;
@@ -28,6 +29,7 @@ const CasingFormStepNav = ({
   canGoNext,
   isLastStep,
   stepError,
+  nextDisabledHint = null,
   onBack,
   onNext,
   theme,
@@ -80,6 +82,8 @@ const CasingFormStepNav = ({
             <ErrorOutlineRoundedIcon sx={cf.stepNav.errorIcon(theme)} />
             <Typography sx={cf.stepNav.stepError(theme)}>{stepError}</Typography>
           </Box>
+        ) : nextDisabledHint ? (
+          <Typography sx={cf.stepNav.hint(theme)}>{nextDisabledHint}</Typography>
         ) : isLastStep ? (
           <Typography sx={cf.stepNav.hint(theme)}>{S.COMPLETE_ALL_STEPS}</Typography>
         ) : null}

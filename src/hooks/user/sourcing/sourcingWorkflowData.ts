@@ -49,18 +49,22 @@ export type RocketMotorBatch = {
   formId?: string | null;
   procurementId?: string | null;
   motorCasingId?: string;
+  projectId?: string;
   motorStage?: string;
+  /** API list field `motorId`; kept as motorNo alias for form flows */
   motorNo?: string;
   casingType?: string;
   insulationType?: string;
   receivingDate?: string;
   nextStep?: string | null;
+  /** Legacy aliases used by form/actions — synced from list API fields */
   batchId: string;
   batchType: string;
   motorId: string;
   motorType: string;
   priority: string;
   assignedTo: { fullName: string } | null;
+  createdBy?: { id: string; fullName: string } | null;
   createdOn: string;
   rmStatus: SourcingStatus;
   draftData: RocketFormData | null;
@@ -73,6 +77,7 @@ export function createEmptyRocketMotorBatch(): RocketMotorBatch {
     formId: null,
     procurementId: null,
     motorCasingId: "",
+    projectId: "",
     motorStage: "",
     motorNo: "",
     batchId: "—",

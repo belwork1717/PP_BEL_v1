@@ -249,6 +249,7 @@ export const SectionCard = ({
   subtitle,
   accentColor,
   index = 0,
+  disabled = false,
   children,
   theme,
   cf,
@@ -258,11 +259,12 @@ export const SectionCard = ({
   subtitle?: string;
   accentColor: string;
   index?: number;
+  disabled?: boolean;
   children: React.ReactNode;
   theme: any;
   cf: any;
 }) => (
-  <Box sx={cf.sectionCard(index)}>
+  <Box sx={cf.sectionCard(index)} aria-disabled={disabled || undefined}>
     <Box sx={cf.sectionCardHeader(accentColor)}>
       <Stack direction="row" alignItems="center" spacing={1.5} flex={1} minWidth={0}>
         <Box sx={cf.sectionNumber}>{number}</Box>
@@ -272,7 +274,7 @@ export const SectionCard = ({
         </Box>
       </Stack>
     </Box>
-    <Box sx={cf.sectionCardBody}>{children}</Box>
+    <Box sx={{ ...cf.sectionCardBody, ...(disabled ? cf.sectionCardBodyDisabled : {}) }}>{children}</Box>
   </Box>
 );
 

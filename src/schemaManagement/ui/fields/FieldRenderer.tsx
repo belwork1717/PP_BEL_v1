@@ -1,6 +1,7 @@
-import { Box, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Box, MenuItem, TextField, Typography } from "@mui/material";
 import type { SchemaField, SchemaThemeTokens } from "../../models/schema.types";
 import { buildInputSx } from "../theme";
+import SchemaApiDropdownField from "./SchemaApiDropdownField";
 
 type FieldRendererProps = {
   field: SchemaField;
@@ -22,6 +23,18 @@ const FieldRenderer = ({ field, value, onChange, readOnly = false, theme }: Fiel
       : field.type === "datetime"
         ? "datetime-local"
         : "text";
+
+  if (field.type === "dropdown" && field.dataSource?.type === "api") {
+    return (
+      <SchemaApiDropdownField
+        field={field}
+        value={value}
+        onChange={onChange}
+        readOnly={readOnly}
+        theme={theme}
+      />
+    );
+  }
 
   if (field.type === "dropdown") {
     return (

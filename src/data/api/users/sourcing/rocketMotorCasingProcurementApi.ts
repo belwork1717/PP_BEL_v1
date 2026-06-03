@@ -1,5 +1,6 @@
-import { del, post, put } from "../../httpClient";
+import { del, patch, post } from "../../httpClient";
 import { USER_ROCKET_MOTOR_CASING_ENDPOINTS } from "../../endPoints";
+import type { RocketMotorCasingFormPayload } from "../../../models/user/RocketMotorCasingFormModel";
 
 export type RocketMotorCasingListRequest = {
   subDepartmentId: number;
@@ -22,8 +23,10 @@ export const fetchRocketMotorCasingFormDetailsApi = async (payload: { motorCasin
   return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.FORM_DETAILS, payload);
 };
 
-export const updateRocketMotorCasingFormApi = async (payload: Record<string, unknown>) => {
-  return await put(USER_ROCKET_MOTOR_CASING_ENDPOINTS.UPDATE_FORM, payload);
+export const updateRocketMotorCasingFormApi = async (
+  payload: RocketMotorCasingFormPayload & { motorCasingId: string }
+) => {
+  return await patch(USER_ROCKET_MOTOR_CASING_ENDPOINTS.UPDATE_FORM, payload);
 };
 
 export const fetchRocketMotorCasingListApi = async (payload: RocketMotorCasingListRequest) => {

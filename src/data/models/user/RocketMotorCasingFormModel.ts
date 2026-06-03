@@ -1,4 +1,11 @@
 import type { DimensionalParameterModel } from "./SubdepartmentCommonModel";
+import type { SchemaDocument, SchemaFormValues, SchemaSectionSubmission } from "../../../schemaManagement/models/schema.types";
+import {
+  buildMockTrialSectionPayload,
+  createMockTrialInitialValues,
+  hydrateMockTrialValuesFromSections,
+  parseMockTrialSavedSections,
+} from "../../../schemaManagement/adapters/rocketMotorCasingMockTrial.adapter";
 
 export type ReceiptStatus = "RECEIVED" | "NOT_RECEIVED";
 export type CasingType = "COMPOSITE" | "METALLIC";
@@ -99,7 +106,9 @@ export function isLooseFlapDimensionalParam(row: { paramName?: string }): boolea
 export type RocketMotorCasingFormData = {
   projectId: string;
   motorStageApi: string;
-  motorNoApi: string;
+  /** User-entered motor ID (API `motorId`); casing ID is assigned by the server */
+  motorId: string;
+  /** Populated after first save; read-only in the form */
   motorCasingId: string;
   casingType: CasingType;
   receivingDate: string;
@@ -135,14 +144,32 @@ export type RocketMotorCasingFormData = {
   weighscaleEquipment: string;
   calibrationDueDate: string;
   dimensionalData: DimensionalReadingFormRow[];
+  mockTrial: RocketMotorCasingMockTrialSlot;
 };
+
+export type RocketMotorCasingMockTrialSlot = {
+  schema: SchemaDocument | null;
+  schemaLoading: boolean;
+  schemaError: string | null;
+  formValues: SchemaFormValues;
+  /** Persisted section rows from API until schema is fetched */
+  savedSections?: SchemaSectionSubmission[];
+};
+
+export const createEmptyMockTrialSlot = (): RocketMotorCasingMockTrialSlot => ({
+  schema: null,
+  schemaLoading: false,
+  schemaError: null,
+  formValues: {},
+  savedSections: undefined,
+});
 
 export type RocketMotorCasingFormPayload = {
   subDepartmentId: number;
   projectId: string;
-  motorStage: string;
-  motorNo: string;
-  motorCasingId: string;
+  motorStage: number | string;
+  motorId: string;
+  motorCasingId?: string;
   formSubmissionType: FormSubmissionType;
   sections: Record<string, unknown>;
 };
@@ -238,7 +265,7 @@ export const EPDM_MECH_KEYS = [
 export const THERMAL_PROP_KEYS = [
   { key: "thermalConductivity", label: "Thermal conductivity", unit: "cal/cm/s/K" },
   { key: "specificHeat", label: "Specific heat", unit: "cal/g/K" },
-  { key: "coefficientOfThermalExp", label: "Co-efficient of thermal expansion", unit: "1/K" },
+  { key: "coefficientOfThermalExpansion", label: "Co-efficient of thermal expansion", unit: "1/K" },
   { key: "ablationRate", label: "Ablation rate", unit: "mm/s @ 300W/cm2" },
 ] as const;
 
@@ -425,7 +452,7 @@ const computeDimensionalRowWithinRange = (row: DimensionalReadingFormRow): boole
 export const INITIAL_ROCKET_MOTOR_CASING_FORM: RocketMotorCasingFormData = {
   projectId: "",
   motorStageApi: "",
-  motorNoApi: "",
+  motorId: "",
   motorCasingId: "",
   casingType: "COMPOSITE",
   receivingDate: "",
@@ -459,6 +486,7 @@ export const INITIAL_ROCKET_MOTOR_CASING_FORM: RocketMotorCasingFormData = {
   weighscaleEquipment: "",
   calibrationDueDate: "",
   dimensionalData: [],
+  mockTrial: createEmptyMockTrialSlot(),
 };
 
 function buildMechRows(
@@ -501,7 +529,8 @@ function buildThermalProperties(form: RocketMotorCasingFormData) {
 export function buildCasingFormPayload(
   form: RocketMotorCasingFormData,
   subDepartmentId: number,
-  formSubmissionType: FormSubmissionType
+  formSubmissionType: FormSubmissionType,
+  options?: { includeMotorCasingId?: boolean; motorCasingId?: string }
 ): RocketMotorCasingFormPayload {
   const mechKeys = form.insulationType === "EPDM" ? EPDM_MECH_KEYS : ROCASIN_MECH_KEYS;
   const mechanicalProperties = buildMechRows(form, mechKeys);
@@ -550,12 +579,15 @@ export function buildCasingFormPayload(
   const w1 = parseNum(form.weightWithoutHarness) ?? 0;
   const w2 = parseNum(form.weightWithHarness) ?? 0;
 
-  return {
+  const stageRaw = form.motorStageApi.trim();
+  const stageNum = Number(stageRaw);
+  const motorStage = stageRaw !== "" && Number.isFinite(stageNum) ? stageNum : stageRaw;
+
+  const payload: RocketMotorCasingFormPayload = {
     subDepartmentId,
     projectId: form.projectId.trim(),
-    motorStage: form.motorStageApi.trim(),
-    motorNo: form.motorNoApi.trim(),
-    motorCasingId: form.motorCasingId.trim(),
+    motorStage,
+    motorId: form.motorId.trim(),
     formSubmissionType,
     sections: {
       motorReceipt: {
@@ -604,8 +636,20 @@ export function buildCasingFormPayload(
         },
       },
       dimensionalInspection,
+      ...(form.mockTrial.schema
+        ? {
+            mockTrial: buildMockTrialSectionPayload(form.mockTrial.schema, form.mockTrial.formValues),
+          }
+        : {}),
     },
   };
+
+  const casingId = String(options?.motorCasingId ?? form.motorCasingId ?? "").trim();
+  if (options?.includeMotorCasingId && casingId) {
+    payload.motorCasingId = casingId;
+  }
+
+  return payload;
 }
 
 function mechRowFromApi(row: Record<string, unknown>): MechPropFormRow {
@@ -628,7 +672,7 @@ function thermalRowFromApi(row: Record<string, unknown>, defaultUnit: string): T
 
 export function parseSectionsToFormData(
   sections: Record<string, unknown>,
-  ids: { projectId?: string; motorStage?: string; motorNo?: string; motorCasingId?: string }
+  ids: { projectId?: string; motorStage?: string; motorId?: string; motorCasingId?: string }
 ): RocketMotorCasingFormData {
   const mr = (sections.motorReceipt ?? {}) as Record<string, unknown>;
   const items = (mr.itemsReceived ?? {}) as Record<string, unknown>;
@@ -678,6 +722,8 @@ export function parseSectionsToFormData(
         })
       : createInitialVisualInspection();
 
+  const mockTrialSaved = parseMockTrialSavedSections(sections.mockTrial);
+
   const dimApi = Array.isArray(sections.dimensionalInspection) ? sections.dimensionalInspection : [];
   const dimensionalData: DimensionalReadingFormRow[] = dimApi.map((d: any, idx: number) => {
     const spec = d.specifiedDimension ?? d.referenceRange ?? {};
@@ -708,7 +754,7 @@ export function parseSectionsToFormData(
     ...INITIAL_ROCKET_MOTOR_CASING_FORM,
     projectId: ids.projectId ?? "",
     motorStageApi: ids.motorStage ?? "",
-    motorNoApi: ids.motorNo ?? "",
+    motorId: ids.motorId ?? "",
     motorCasingId: ids.motorCasingId ?? "",
     casingType: (String(mr.casingType ?? "COMPOSITE").toUpperCase() as CasingType) || "COMPOSITE",
     receivingDate: str(mr.receivingDate).slice(0, 10),
@@ -745,16 +791,19 @@ export function parseSectionsToFormData(
     weighscaleEquipment: str(cal.equipmentDetails),
     calibrationDueDate: str(cal.calibrationDueDate).slice(0, 10),
     dimensionalData,
+    mockTrial: {
+      ...createEmptyMockTrialSlot(),
+      savedSections: mockTrialSaved,
+    },
   };
 }
 
-export const CASING_FORM_STEP_COUNT = 4;
+export const CASING_FORM_STEP_COUNT = 5;
 
 const validateIdentification = (form: RocketMotorCasingFormData): string | null => {
   if (!form.projectId.trim()) return "Project is required.";
   if (!form.motorStageApi.trim()) return "Motor stage is required.";
-  if (!form.motorNoApi.trim()) return "Motor no. is required.";
-  if (!form.motorCasingId.trim()) return "Motor casing ID is required.";
+  if (!form.motorId.trim()) return "Motor ID is required.";
   return null;
 };
 
@@ -773,7 +822,7 @@ const validateReceiptAndInsulation = (form: RocketMotorCasingFormData): string |
   return null;
 };
 
-/** Validates the current wizard step before moving forward (steps 0–3). */
+/** Validates the current wizard step before moving forward (steps 0–4). */
 export function validateCasingFormStep(form: RocketMotorCasingFormData, step: number): string | null {
   switch (step) {
     case 0:
@@ -790,13 +839,19 @@ export function validateCasingFormStep(form: RocketMotorCasingFormData, step: nu
         return "Dimensional inspection parameters are required for the selected motor stage.";
       }
       return null;
+    case 4:
+      return null;
     default:
       return null;
   }
 }
 
-export function canSaveCasingDraft(form: RocketMotorCasingFormData): boolean {
+export function isCasingIdentificationComplete(form: RocketMotorCasingFormData): boolean {
   return validateIdentification(form) === null;
+}
+
+export function canSaveCasingDraft(form: RocketMotorCasingFormData): boolean {
+  return isCasingIdentificationComplete(form);
 }
 
 export function isCasingFormComplete(form: RocketMotorCasingFormData): boolean {
@@ -837,5 +892,12 @@ export function serializeCasingForm(form: RocketMotorCasingFormData): string {
       mediaFile: v.mediaFile?.name ?? null,
       mediaExisting: v.mediaExisting?.fileName ?? null,
     })),
+    mockTrial: {
+      schema: null,
+      schemaLoading: false,
+      schemaError: form.mockTrial.schemaError,
+      formValues: form.mockTrial.formValues,
+      savedSections: form.mockTrial.savedSections,
+    },
   });
 }

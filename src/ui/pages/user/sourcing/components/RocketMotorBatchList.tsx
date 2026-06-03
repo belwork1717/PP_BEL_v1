@@ -17,7 +17,10 @@ import { useThemeStore } from "../../../../../app/store/themeStore";
 import getSourcingTheme from "../../../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
 import { STRINGS } from "../../../../../app/config/strings";
-import { canDeleteRocketMotorCasing } from "../../../../../data/models/user/RocketMotorCasingProcurementModel";
+import {
+  canDeleteRocketMotorCasing,
+  ROCKET_MOTOR_CASING_SEARCH_FIELDS,
+} from "../../../../../data/models/user/RocketMotorCasingProcurementModel";
 import type { RocketMotorCasingListAdvancedFilters } from "../../../../../hooks/user/sourcing/useRocketMotorCasingList";
 
 const {
@@ -196,38 +199,52 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
     [theme.palette]
   );
 
+  const formatListDate = (v: string) => {
+    if (!v) return "—";
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return v;
+    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
   const COLUMNS = useMemo(
     () => [
       {
-        key: "batchId",
+        key: "motorCasingId",
         label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_CASING_ID,
-        render: (v: string) => <Typography sx={theme.batchList.batchIdText}>{v}</Typography>,
+        render: (v: string) => <Typography sx={theme.batchList.batchIdText}>{v || "—"}</Typography>,
       },
       {
-        key: "batchType",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_BATCH_TYPE,
-        align: "center",
-        render: (v: string) => <Chip label={v} size="small" sx={theme.batchList.batchTypeChip} />,
+        key: "projectId",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_PROJECT_ID,
+        render: (v: string) => <Typography sx={theme.batchList.normalText}>{v || "—"}</Typography>,
       },
       {
         key: "motorId",
         label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_ID,
-        render: (v: string) => <Typography sx={theme.batchList.normalText}>{v}</Typography>,
+        render: (v: string) => <Typography sx={theme.batchList.normalText}>{v || "—"}</Typography>,
       },
       {
-        key: "motorType",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_TYPE,
+        key: "motorStage",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_MOTOR_STAGE,
         align: "center",
         render: (v: string) => (
-          <Chip
-            label={`${STRINGS.SOURCING.BATCH_LIST.MOTOR_TYPE_PREFIX}${v}`}
-            size="small"
-            sx={theme.batchList.batchTypeChip}
-          />
+          <Chip label={v || "—"} size="small" sx={theme.batchList.batchTypeChip} />
         ),
       },
       {
-        key: "assignedTo.fullName",
+        key: "casingType",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_CASING_TYPE,
+        align: "center",
+        render: (v: string) => <Chip label={v || "—"} size="small" sx={theme.batchList.batchTypeChip} />,
+      },
+      {
+        key: "insulationType",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_INSULATION_TYPE,
+        align: "center",
+        render: (v: string) => <Chip label={v || "—"} size="small" sx={theme.batchList.batchTypeChip} />,
+      },
+      {
+        key: "createdBy.fullName",
         label: STRINGS.SOURCING.BATCH_LIST.COL_CREATED_BY,
         render: (v: string) => (
           <IconText
@@ -243,29 +260,14 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         render: (v: string) => (
           <IconText
             icon={<CalendarMonthRoundedIcon sx={theme.batchList.icon} />}
-            text={new Date(v).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            text={formatListDate(v)}
             textSx={theme.batchList.subtleText}
           />
         ),
       },
       {
-        key: "priority",
-        label: STRINGS.SOURCING.BATCH_LIST.COL_PRIORITY,
-        align: "center",
-        render: (v: string) => {
-          const cfg = theme.batchList.priorityConfig[v] ?? theme.batchList.priorityConfig.Medium;
-          return (
-            <Chip
-              label={v}
-              size="small"
-              sx={{ height: 22, fontSize: "0.68rem", fontWeight: 700, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}
-            />
-          );
-        },
-      },
-      {
         key: "rmStatus",
-        label: "Operation Status",
+        label: STRINGS.SOURCING.BATCH_LIST.COL_STAGE_STATUS,
         align: "center",
         render: (v: string, row: any) => (
           <UserWorkflowStatusCell
@@ -486,7 +488,7 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         statusField="rmStatus"
         statusConfig={statusConfig}
         filters={[]}
-        searchFields={["batchId", "motorId", "motorCasingId", "motorType", "batchType"]}
+        searchFields={[...ROCKET_MOTOR_CASING_SEARCH_FIELDS]}
         highlightRow={(row: any) => row.rmStatus === OPERATION_STATUS.REJECTED}
         highlightColor={theme.palette.danger}
         rowsPerPageOptions={rowsPerPageOptions}

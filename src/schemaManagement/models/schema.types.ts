@@ -7,6 +7,13 @@ export type SchemaFieldType =
   | "table"
   | string;
 
+export type SchemaFieldDataSource = {
+  type: "api" | string;
+  api?: string;
+  method?: string;
+  requestBody?: Record<string, unknown>;
+};
+
 export type SchemaField = {
   key: string;
   label: string;
@@ -19,6 +26,11 @@ export type SchemaField = {
   addRowAllowed?: boolean;
   columns?: SchemaColumn[];
   defaultRows?: Record<string, unknown>[];
+  dataSource?: SchemaFieldDataSource;
+  displayKey?: string;
+  valueKey?: string;
+  measurementConfig?: { valueType?: string; unit?: string };
+  formula?: { expression?: string; unit?: string };
 };
 
 export type SchemaColumn = {
@@ -27,6 +39,13 @@ export type SchemaColumn = {
   type: SchemaFieldType;
   readonly?: boolean;
   unit?: string;
+  measurementConfig?: { valueType?: string; unit?: string };
+  formula?: { expression?: string; unit?: string };
+};
+
+export type SchemaGroupedColumn = {
+  groupLabel?: string;
+  columns?: SchemaColumn[];
 };
 
 export type SchemaNestedGroup = {
@@ -36,11 +55,12 @@ export type SchemaNestedGroup = {
 export type SchemaSection = {
   sectionId: string;
   title: string;
-  type: "dynamic-group" | "table" | "form" | string;
+  type: "dynamic-group" | "table" | "form" | "complex-table" | string;
   addRowAllowed?: boolean;
   groupLabel?: string;
   fields?: SchemaField[];
   columns?: SchemaColumn[];
+  groupedColumns?: SchemaGroupedColumn[];
   defaultRows?: Record<string, unknown>[];
   lots?: SchemaNestedGroup;
   drums?: SchemaNestedGroup;
@@ -60,12 +80,18 @@ export type SchemaMaterialDetails = {
   grade?: SchemaGrade | null;
 };
 
+export type SchemaFormDetails = {
+  title?: string;
+  description?: string;
+};
+
 export type SchemaDocument = {
   schemaVersion: string;
   schemaType: string;
   functionality: string;
   layout?: { type: string };
   rawMaterialDetails: SchemaMaterialDetails;
+  formDetails?: SchemaFormDetails;
   sections: SchemaSection[];
 };
 

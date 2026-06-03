@@ -14,10 +14,12 @@ import {
   type RocketMotorCasingListRequest,
   updateRocketMotorCasingFormApi,
 } from "../../../data/api/users/sourcing/rocketMotorCasingProcurementApi";
-import { UserSubDepartmentDashboardStatsModel } from "../../../data/models/user/UserSubDepartmentDashboardStatsModel";
+import { RocketMotorCasingStatsModel } from "../../../data/models/user/RocketMotorCasingStatsModel";
 
 export type RocketMotorCasingCreatePayload = RocketMotorCasingFormPayload;
-export type RocketMotorCasingUpdatePayload = RocketMotorCasingFormPayload;
+export type RocketMotorCasingUpdatePayload = RocketMotorCasingFormPayload & {
+  motorCasingId: string;
+};
 
 export type RocketMotorCasingDetailsPayload = {
   motorCasingId: string;
@@ -60,7 +62,7 @@ export const rocketMotorCasingController = {
 
   updateForm: async (payload: RocketMotorCasingUpdatePayload) => {
     try {
-      const response = await updateRocketMotorCasingFormApi(payload as unknown as Record<string, unknown>);
+      const response = await updateRocketMotorCasingFormApi(payload);
       return new ApiResponseModel<RocketMotorCasingSubmitResponseModel>(response, (res) =>
         RocketMotorCasingSubmitResponseModel.fromApi(res)
       );
@@ -84,7 +86,7 @@ export const rocketMotorCasingController = {
     try {
       const response = await fetchRocketMotorCasingStatsApi({ subDepartmentId });
       return new ApiResponseModel(response, (res) =>
-        UserSubDepartmentDashboardStatsModel.fromApi(res?.data)
+        RocketMotorCasingStatsModel.fromApi(res?.data)
       );
     } catch (error) {
       console.error("Failed to fetch rocket motor casing stats:", error);

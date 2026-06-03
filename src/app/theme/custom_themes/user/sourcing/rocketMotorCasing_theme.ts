@@ -44,6 +44,24 @@ export const getRocketMotorCasingTheme = (baseTheme: any) => {
 				borderLeft: `4px solid ${accentColor}`,
 			}),
 			sectionCardBody: { px: 2, py: 2 },
+			sectionCardBodyDisabled: {
+				opacity: 0.48,
+				pointerEvents: "none",
+				userSelect: "none",
+				filter: "grayscale(0.12)",
+			},
+			identificationGateHint: {
+				fontSize: "0.8rem",
+				fontWeight: 600,
+				color: palette.textSub,
+				lineHeight: 1.45,
+				px: 1.5,
+				py: 1.25,
+				mb: 0.5,
+				borderRadius: 2,
+				border: `1px dashed ${alpha(palette.primaryLight ?? "#2E86C1", 0.45)}`,
+				background: alpha(palette.primaryLight ?? "#2E86C1", 0.05),
+			},
 			sectionNumber: {
 				width: 26,
 				height: 26,
@@ -418,6 +436,7 @@ export const getRocketMotorCasingTheme = (baseTheme: any) => {
 				waivers: palette.warn ?? "#D4AC0D",
 				visual: palette.accentLight ?? "#1ABC9C",
 				dimensional: "#1A5276",
+				mockTrial: "#6C3483",
 			},
 			footerNoteText: {
 				fontSize: "0.7rem",
@@ -429,6 +448,41 @@ export const getRocketMotorCasingTheme = (baseTheme: any) => {
 			sectionRow: { mb: 1 },
 		},
 		casingDetails: {
+			/** Opaque chips for the dark gradient banner (batch-list tints are too faint here). */
+			bannerStatusConfig: (() => {
+				const warnBase = palette.warn ?? "#D4AC0D";
+				const primary = palette.primary ?? "#1B4F72";
+				const primaryLight = palette.primaryLight ?? "#2E86C1";
+				const success = palette.success ?? "#148F77";
+				const danger = palette.danger ?? "#C0392B";
+				return {
+					["Initiated"]: {
+						color: "#334155",
+						bg: "#F8FAFC",
+						border: "#CBD5E1",
+					},
+					["In Progress"]: {
+						color: primary,
+						bg: "#E8F4FC",
+						border: alpha(primaryLight, 0.5),
+					},
+					["Waiting for Approval"]: {
+						color: "#7D6608",
+						bg: "#FFF4D6",
+						border: warnBase,
+					},
+					["Approved"]: {
+						color: success,
+						bg: "#E8F8F5",
+						border: alpha(success, 0.5),
+					},
+					["Rejected"]: {
+						color: danger,
+						bg: "#FDEDEC",
+						border: alpha(danger, 0.5),
+					},
+				} as Record<string, { color: string; bg: string; border: string }>;
+			})(),
 			page: { animation: "fadeIn 0.35s ease both" },
 			document: {
 				borderRadius: 3,

@@ -34,6 +34,7 @@ const RocketMotorCasing = () => {
     isDimensionalParamsLoading,
     fetchingMotorParams,
     resolvedMotorStage,
+    subDepartmentId,
     lookups,
     backConfirmOpen,
     canSubmit,
@@ -129,6 +130,7 @@ const RocketMotorCasing = () => {
                   dimensionalParameters={dimensionalParameters}
                   dimensionalParametersErrorMessage={dimensionalParametersErrorMessage}
                   motorStage={resolvedMotorStage}
+                  subDepartmentId={subDepartmentId}
                   loadingDimensionalParams={loadingDimensionalParams}
                   lockIdentification={lockIdentification}
                   showDeleteCasing={canDeleteActiveCasing}

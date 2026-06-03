@@ -32,8 +32,11 @@ import {
   EMPTY_LOOSE_FLAP,
   isLooseFlapDimensionalParam,
   validateCasingFormStep,
+  isCasingIdentificationComplete,
+  createEmptyMockTrialSlot,
 } from "../../../../../../data/models/user/RocketMotorCasingFormModel";
 import CasingFormStepNav from "./CasingFormStepNav";
+import RocketMotorCasingMockTrialSchemaPanel from "./RocketMotorCasingMockTrialSchemaPanel";
 import type { useRocketMotorCasingLookups } from "../../../../../../hooks/user/sourcing/useRocketMotorCasingLookups";
 import {
   DateField,
@@ -80,6 +83,7 @@ type Props = {
   }>;
   dimensionalParametersErrorMessage: string;
   motorStage: string;
+  subDepartmentId: number;
   loadingDimensionalParams?: boolean;
   lockIdentification?: boolean;
   showDeleteCasing?: boolean;
@@ -95,6 +99,7 @@ const MotorCasingCreateForm = ({
   dimensionalParameters,
   dimensionalParametersErrorMessage,
   motorStage,
+  subDepartmentId,
   loadingDimensionalParams = false,
   lockIdentification = false,
   showDeleteCasing = false,
@@ -105,8 +110,6 @@ const MotorCasingCreateForm = ({
   const casingTheme = theme.sourcing.rocketMotor.casingForm;
   const cf = theme.sourcing.rocketMotor.createForm;
   const sectionColors = casingTheme.sectionColors;
-  const motorNoOpts = useMemo(() => lookups.motorNoOptions(form.motorStageApi), [lookups, form.motorStageApi]);
-
   const patch = (partial: Partial<RocketMotorCasingFormData>) => setForm((prev) => ({ ...prev, ...partial }));
 
   const onInsulationTypeChange = (type: InsulationType) => {
@@ -145,8 +148,6 @@ const MotorCasingCreateForm = ({
     label: `Stage ${s.motorStage}`,
     meta: s.noOfmotors ? `${s.noOfmotors} motors` : undefined,
   }));
-  const motorNoOptions = motorNoOpts.map((n) => ({ value: n, label: String(n) }));
-
   const resolvedProjectName = useMemo(() => {
     const match = lookups.projects.find((p) => p.projectId === form.projectId);
     return match?.projectName || form.projectId;
@@ -161,11 +162,19 @@ const MotorCasingCreateForm = ({
   const [stepError, setStepError] = useState<string | null>(null);
 
   const stepLabels = useMemo(
-    () => [S.STEP_IDENTIFICATION_RECEIPT, S.STEP_VISUAL, S.STEP_WEIGHMENT, S.STEP_DIMENSIONAL],
+    () => [
+      S.STEP_IDENTIFICATION_RECEIPT,
+      S.STEP_VISUAL,
+      S.STEP_WEIGHMENT,
+      S.STEP_DIMENSIONAL,
+      S.STEP_MOCK_TRIAL,
+    ],
     []
   );
 
   const isLastStep = step === CASING_FORM_STEP_COUNT - 1;
+  const identificationComplete = isCasingIdentificationComplete(form);
+  const canAdvanceFromStep = step !== 0 || identificationComplete;
 
   const handleStepBack = () => {
     setStepError(null);
@@ -187,6 +196,13 @@ const MotorCasingCreateForm = ({
   useEffect(() => {
     setStepError(null);
   }, [form]);
+
+  useEffect(() => {
+    if (!identificationComplete && step > 0) {
+      setStep(0);
+      setStepError(null);
+    }
+  }, [identificationComplete, step]);
 
   return (
     <Box sx={{ ...casingTheme.root, ...cf.pageRoot }}>
@@ -254,19 +270,21 @@ const MotorCasingCreateForm = ({
                 theme={theme}
               />
               <TextFieldField
-                label={S.MOTOR_NO}
-                value={form.motorNoApi}
+                label={S.MOTOR_ID}
+                value={form.motorId}
                 onChange={() => undefined}
                 disabled
                 theme={theme}
               />
-              <TextFieldField
-                label={S.MOTOR_CASING_ID}
-                value={form.motorCasingId}
-                onChange={() => undefined}
-                disabled
-                theme={theme}
-              />
+              {form.motorCasingId ? (
+                <TextFieldField
+                  label={S.MOTOR_CASING_ID}
+                  value={form.motorCasingId}
+                  onChange={() => undefined}
+                  disabled
+                  theme={theme}
+                />
+              ) : null}
             </>
           ) : (
             <>
@@ -283,28 +301,34 @@ const MotorCasingCreateForm = ({
               <SelectField
                 label={S.MOTOR_STAGE}
                 value={form.motorStageApi}
-                onChange={(v) => patch({ motorStageApi: v, motorNoApi: "" })}
+                onChange={(v) =>
+                  patch({
+                    motorStageApi: v,
+                    mockTrial: createEmptyMockTrialSlot(),
+                    dimensionalData: [],
+                  })
+                }
                 options={stageOptions}
                 placeholder={S.SELECT_STAGE}
                 disabled={lookups.loading || loadingDimensionalParams}
                 theme={theme}
               />
-              <SelectField
-                label={S.MOTOR_NO}
-                value={form.motorNoApi}
-                onChange={(v) => patch({ motorNoApi: v })}
-                options={motorNoOptions}
-                placeholder={S.SELECT_MOTOR_NO}
-                disabled={!form.motorStageApi}
-                theme={theme}
-              />
               <TextFieldField
-                label={S.MOTOR_CASING_ID}
-                value={form.motorCasingId}
-                onChange={(v) => patch({ motorCasingId: v })}
-                placeholder={SF.MOTOR_CASING_ID_PH}
+                label={S.MOTOR_ID}
+                value={form.motorId}
+                onChange={(v) => patch({ motorId: v })}
+                placeholder={S.MOTOR_ID_PH}
                 theme={theme}
               />
+              {form.motorCasingId ? (
+                <TextFieldField
+                  label={S.MOTOR_CASING_ID}
+                  value={form.motorCasingId}
+                  onChange={() => undefined}
+                  disabled
+                  theme={theme}
+                />
+              ) : null}
             </>
           )}
         </FieldGrid>
@@ -318,8 +342,22 @@ const MotorCasingCreateForm = ({
         )}
       </SectionCard>
 
+      {!identificationComplete ? (
+        <Typography sx={cf.identificationGateHint} role="status">
+          {S.IDENTIFICATION_GATE_HINT}
+        </Typography>
+      ) : null}
+
       {/* 2 — Motor receipt */}
-      <SectionCard number="2" title={S.SECTION_MOTOR_RECEIPT} accentColor={sectionColors.motorId} index={1} theme={theme} cf={cf}>
+      <SectionCard
+        number="2"
+        title={S.SECTION_MOTOR_RECEIPT}
+        accentColor={sectionColors.motorId}
+        index={1}
+        disabled={!identificationComplete}
+        theme={theme}
+        cf={cf}
+      >
         <FieldGrid theme={theme} cf={cf}>
           <SelectField
             label={S.CASING_TYPE}
@@ -528,7 +566,7 @@ const MotorCasingCreateForm = ({
         </>
       )}
 
-      {step === 1 && (
+      {step === 1 && identificationComplete && (
       <SectionCard number="3" title={S.SECTION_VISUAL} subtitle={S.COL_DESCRIPTION} accentColor={sectionColors.visual} index={2} theme={theme} cf={cf}>
         {form.visualInspection.map((row, idx) => (
           <Box key={row.itemKey} sx={cf.visualRow(idx)}>
@@ -614,7 +652,7 @@ const MotorCasingCreateForm = ({
       </SectionCard>
       )}
 
-      {step === 2 && (
+      {step === 2 && identificationComplete && (
       <SectionCard number="4" title={S.SECTION_WEIGHMENT} accentColor={sectionColors.clearance} index={3} theme={theme} cf={cf}>
         <FieldGrid theme={theme} cf={cf}>
           <TextFieldField label={S.WEIGHT_WITHOUT} value={form.weightWithoutHarness} onChange={(v) => patch({ weightWithoutHarness: v })} type="number" theme={theme} />
@@ -625,7 +663,7 @@ const MotorCasingCreateForm = ({
       </SectionCard>
       )}
 
-      {step === 3 && (
+      {step === 3 && identificationComplete && (
       <SectionCard number="5" title={S.SECTION_DIMENSIONAL} accentColor={sectionColors.dimensional} index={4} theme={theme} cf={cf}>
         {!motorStage ? (
           <Box sx={theme.workflow.formElements.emptyStateBox}>
@@ -746,14 +784,35 @@ const MotorCasingCreateForm = ({
       </SectionCard>
       )}
 
+      {step === 4 && identificationComplete && (
+        <SectionCard
+          number="6"
+          title={S.SECTION_MOCK_TRIAL}
+          accentColor={sectionColors.mockTrial}
+          index={5}
+          disabled={!String(form.motorStageApi ?? "").trim()}
+          theme={theme}
+          cf={cf}
+        >
+          <RocketMotorCasingMockTrialSchemaPanel
+            motorStage={form.motorStageApi || motorStage}
+            subDepartmentId={subDepartmentId}
+            slot={form.mockTrial}
+            onSlotChange={(mockTrial) => patch({ mockTrial })}
+            theme={theme}
+          />
+        </SectionCard>
+      )}
+
       <CasingFormStepNav
         currentStep={step}
         totalSteps={CASING_FORM_STEP_COUNT}
         stepLabels={stepLabels}
         canGoBack={step > 0}
-        canGoNext={!isLastStep}
+        canGoNext={!isLastStep && canAdvanceFromStep}
         isLastStep={isLastStep}
         stepError={stepError}
+        nextDisabledHint={!canAdvanceFromStep && !isLastStep ? S.IDENTIFICATION_GATE_HINT : null}
         onBack={handleStepBack}
         onNext={handleStepNext}
         theme={theme}

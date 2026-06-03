@@ -4,11 +4,35 @@ import { useUserBatchRefreshStore } from "../../../app/store/userBatchRefreshSto
 import { STRINGS } from "../../../app/config/strings";
 import { operationsController } from "../../../controllers/user/operationsController";
 import rocketMotorCasingController from "../../../controllers/user/sourcing/rocketMotorCasingController";
-import { normalizeRocketCasingListStatus } from "../../../data/models/user/RocketMotorCasingProcurementModel";
+import {
+  normalizeRocketCasingListStatus,
+  rocketMotorCasingMatchesSearch,
+} from "../../../data/models/user/RocketMotorCasingProcurementModel";
 import { OPERATION_STATUS } from "../../operationStatus";
 import type { RocketMotorBatch } from "./sourcingWorkflowData";
 
 const FILTER_ALL = STRINGS.USER_BATCH_LIST.FILTER_ALL;
+/** Fetch up to this many rows when filtering search client-side across all columns */
+const CLIENT_SEARCH_FETCH_LIMIT = 5000;
+
+const buildStatusCountsFromBatches = (batches: RocketMotorBatch[], totalRecords: number) => {
+  const S = OPERATION_STATUS;
+  const counts: Record<string, number> = {
+    [S.INITIATED]: 0,
+    [S.IN_PROGRESS]: 0,
+    [S.WAITING_FOR_APPROVAL]: 0,
+    [S.APPROVED]: 0,
+    [S.REJECTED]: 0,
+  };
+  batches.forEach((batch) => {
+    const status = batch.rmStatus;
+    if (status in counts) counts[status] += 1;
+  });
+  return {
+    ...counts,
+    [FILTER_ALL]: totalRecords,
+  };
+};
 
 const UI_STATUS_TO_API: Record<string, string> = {
   [OPERATION_STATUS.INITIATED]: "INITIATED",
@@ -38,33 +62,42 @@ const emptyAdvanced: RocketMotorCasingListAdvancedFilters = {
 
 /** Map list API row → batch shape used by RocketMotorBatchList / form hook */
 export function mapRocketMotorCasingListRow(row: Record<string, unknown>): RocketMotorBatch {
-  const procurementId = String(row?.procurementId ?? "");
-  const motorCasingId = String(row?.motorCasingId ?? "");
-  const motorStage = String(row?.motorStage ?? "");
-  const motorNo = String(row?.motorNo ?? "");
+  const motorCasingId = String(row?.motorCasingId ?? "").trim();
+  const projectId = String(row?.projectId ?? "").trim();
+  const motorStage =
+    row?.motorStage != null && String(row.motorStage).trim() !== "" ? String(row.motorStage) : "";
+  const motorId = String(row?.motorId ?? row?.motorNo ?? "").trim();
+  const casingType = String(row?.casingType ?? "").trim();
   const statusRaw = String(row?.status ?? "");
   const rmStatus = normalizeRocketCasingListStatus(statusRaw);
 
+  const createdBy =
+    row?.createdBy && typeof row.createdBy === "object"
+      ? {
+          id: String((row.createdBy as { id?: string }).id ?? "").trim(),
+          fullName: String((row.createdBy as { fullName?: string }).fullName ?? "").trim(),
+        }
+      : null;
+
   return {
-    id: motorCasingId || procurementId,
-    formId: procurementId || null,
-    procurementId: procurementId || null,
+    id: motorCasingId || motorId,
+    formId: null,
+    procurementId: null,
     motorCasingId,
+    projectId,
     motorStage,
-    motorNo,
-    casingType: String(row?.casingType ?? ""),
-    insulationType: String(row?.insulationType ?? ""),
-    receivingDate: String(row?.receivingDate ?? ""),
+    motorNo: motorId,
+    motorId: motorId || "—",
+    casingType,
+    insulationType: String(row?.insulationType ?? "").trim(),
+    receivingDate: String(row?.receivingDate ?? "").trim(),
     nextStep: row?.nextStep != null ? String(row.nextStep) : null,
-    batchId: motorCasingId || procurementId || "—",
-    batchType: String(row?.casingType ?? "—"),
-    motorId: motorNo || motorStage || "—",
+    batchId: motorCasingId || "—",
+    batchType: casingType || "—",
     motorType: motorStage,
-    priority: "Medium",
-    assignedTo:
-      row?.createdBy && typeof row.createdBy === "object"
-        ? { fullName: String((row.createdBy as { fullName?: string }).fullName ?? "") }
-        : null,
+    priority: "",
+    assignedTo: createdBy ? { fullName: createdBy.fullName } : null,
+    createdBy,
     createdOn: String(row?.createdOn ?? ""),
     rmStatus,
     draftData: null,
@@ -205,15 +238,12 @@ export const useRocketMotorCasingList = () => {
 
     setLoading(true);
     try {
+      const isClientSearch = Boolean(debouncedSearch.trim());
       const payload: Parameters<typeof rocketMotorCasingController.fetchCasingList>[0] = {
         subDepartmentId,
-        page: page + 1,
-        limit: rowsPerPage,
+        page: isClientSearch ? 1 : page + 1,
+        limit: isClientSearch ? CLIENT_SEARCH_FETCH_LIMIT : rowsPerPage,
       };
-
-      if (debouncedSearch.trim()) {
-        payload.search = debouncedSearch.trim();
-      }
 
       if (statusFilter !== FILTER_ALL) {
         const apiStatus = UI_STATUS_TO_API[statusFilter];
@@ -251,10 +281,20 @@ export const useRocketMotorCasingList = () => {
           pagination?: { totalRecords?: number };
         };
         const rows = Array.isArray(data.casings) ? data.casings : [];
-        const total = Number(data.pagination?.totalRecords ?? rows.length);
-        setBatches(rows.map((r) => mapRocketMotorCasingListRow(r as Record<string, unknown>)));
-        setStatusCounts(mapStatusCountsForUi(data.statusCounts, total));
-        setTotalRecords(total);
+        const mapped = rows.map((r) => mapRocketMotorCasingListRow(r as Record<string, unknown>));
+
+        if (isClientSearch) {
+          const matched = mapped.filter((batch) => rocketMotorCasingMatchesSearch(batch, debouncedSearch));
+          const paged = matched.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+          setBatches(paged);
+          setTotalRecords(matched.length);
+          setStatusCounts(buildStatusCountsFromBatches(matched, matched.length));
+        } else {
+          const total = Number(data.pagination?.totalRecords ?? mapped.length);
+          setBatches(mapped);
+          setStatusCounts(mapStatusCountsForUi(data.statusCounts, total));
+          setTotalRecords(total);
+        }
       } else {
         setBatches([]);
         setTotalRecords(0);

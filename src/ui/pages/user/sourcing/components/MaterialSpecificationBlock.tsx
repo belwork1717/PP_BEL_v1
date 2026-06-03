@@ -397,7 +397,7 @@ const MaterialSpecificationBlock = ({
                   <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
                     <Typography sx={specStyles.specText}>{row.specification}</Typography>
                     {rowFailed && (
-                      <Chip label={formStrings.SPEC_STATUS_FAILED} size="small" sx={specStyles.failedSpecChip} />
+                        <Chip label={formStrings.SPEC_STATUS_OUT_OF_RANGE} size="small" sx={specStyles.failedSpecChip} />
                     )}
                   </Stack>
                 </TableCell>

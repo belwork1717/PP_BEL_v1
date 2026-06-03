@@ -33,3 +33,7 @@ export const fetchRocketMotorCasingListApi = async (payload: RocketMotorCasingLi
 export const deleteRocketMotorCasingFormApi = async (payload: { motorCasingId: string }) => {
   return await del(USER_ROCKET_MOTOR_CASING_ENDPOINTS.DELETE_FORM, { data: payload });
 };
+
+export const fetchRocketMotorCasingStatsApi = async (payload: { subDepartmentId: number }) => {
+  return await post(USER_ROCKET_MOTOR_CASING_ENDPOINTS.STATS, payload);
+};

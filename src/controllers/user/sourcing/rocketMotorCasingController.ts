@@ -10,9 +10,11 @@ import {
   deleteRocketMotorCasingFormApi,
   fetchRocketMotorCasingFormDetailsApi,
   fetchRocketMotorCasingListApi,
+  fetchRocketMotorCasingStatsApi,
   type RocketMotorCasingListRequest,
   updateRocketMotorCasingFormApi,
 } from "../../../data/api/users/sourcing/rocketMotorCasingProcurementApi";
+import { UserSubDepartmentDashboardStatsModel } from "../../../data/models/user/UserSubDepartmentDashboardStatsModel";
 
 export type RocketMotorCasingCreatePayload = RocketMotorCasingFormPayload;
 export type RocketMotorCasingUpdatePayload = RocketMotorCasingFormPayload;
@@ -74,6 +76,18 @@ export const rocketMotorCasingController = {
       return new ApiResponseModel(response);
     } catch (error) {
       console.error("Failed to delete rocket motor casing form:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  fetchStats: async (subDepartmentId: number) => {
+    try {
+      const response = await fetchRocketMotorCasingStatsApi({ subDepartmentId });
+      return new ApiResponseModel(response, (res) =>
+        UserSubDepartmentDashboardStatsModel.fromApi(res?.data)
+      );
+    } catch (error) {
+      console.error("Failed to fetch rocket motor casing stats:", error);
       return new ApiResponseModel(error);
     }
   },

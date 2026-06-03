@@ -58,7 +58,7 @@ export const operationsController = {
   },
 
   /**
-   * Fetch materials by type (SOLID | LIQUID) from subdepartment materials-list.
+   * Fetch materials by type (SOLID | LIQUID | BOTH) from subdepartment materials-list.
    */
   fetchMaterialsList: async (payload: MaterialsListRequest) => {
     try {
@@ -73,43 +73,13 @@ export const operationsController = {
   },
 
   /**
-   * Fetch solid + liquid materials and merge for dropdowns that need all types.
+   * Fetch solid + liquid materials in one request (materialType: BOTH).
    */
   fetchAllMaterialsList: async () => {
     try {
-      const [solidResponse, liquidResponse] = await Promise.all([
-        fetchMaterialsListApi({ materialType: "SOLID" }),
-        fetchMaterialsListApi({ materialType: "LIQUID" }),
-      ]);
-
-      const solidList =
-        solidResponse?.success && Array.isArray(solidResponse.data)
-          ? normalizeMaterialsListResponse(solidResponse.data)
-          : [];
-      const liquidList =
-        liquidResponse?.success && Array.isArray(liquidResponse.data)
-          ? normalizeMaterialsListResponse(liquidResponse.data)
-          : [];
-      const merged = [...solidList, ...liquidList];
-
-      if (merged.length > 0) {
-        return new ApiResponseModel<MaterialsListItem[]>({
-          success: true,
-          statusCode: 200,
-          message: solidResponse?.message ?? liquidResponse?.message ?? "Materials fetched successfully",
-          data: merged,
-        });
-      }
-
-      const failedResponse = solidResponse?.success === false ? solidResponse : liquidResponse;
-      return new ApiResponseModel<MaterialsListItem[]>(
-        failedResponse ?? {
-          success: false,
-          statusCode: 500,
-          message: "Failed to fetch materials",
-          data: null,
-        },
-        (res) => normalizeMaterialsListResponse(res?.data)
+      const response = await fetchMaterialsListApi({ materialType: "BOTH" });
+      return new ApiResponseModel<MaterialsListItem[]>(response, (res) =>
+        normalizeMaterialsListResponse(res?.data)
       );
     } catch (error) {
       console.error("Failed to fetch all materials list:", error);

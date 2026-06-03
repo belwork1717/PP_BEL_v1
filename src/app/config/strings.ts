@@ -322,6 +322,13 @@ export const STRINGS = {
       NEW_SUBMISSION: "New Submission",
       FORM_HEADER_CREATE_LOT_TITLE: "Create Lot",
       FORM_HEADER_CREATE_LOT_SUBTITLE: "Enter details to fill the lot details",
+      STATS: {
+        CREATED_LOTS: "Created Lots",
+        PENDING_LOTS: "Pending Lots",
+        WAITING_FOR_APPROVAL: "Waiting for Approval",
+        APPROVED_LOTS: "Approved Lots",
+        REJECTED_LOTS: "Rejected Lots",
+      },
     },
     CASING: {
       TITLE: "Rocket Motor Casing Receipt", // Merged
@@ -462,7 +469,7 @@ export const STRINGS = {
       UPDATE_DRAFT_SUCCESS: "Raw material procurement draft updated successfully.",
       UPDATE_SUBMIT_SUCCESS: "Raw material procurement updated for approval successfully.",
       EDIT_MODE_BANNER: "You are editing a rejected submission. Previously submitted values are pre-loaded. Review and correct before resubmitting.",
-      SPEC_STATUS_FAILED: "Failed",
+      SPEC_STATUS_OUT_OF_RANGE: "Out of Range",
       BLOCK_LABEL: "Block",
       SPECIFICATION_LABEL: "specification",
       SPECIFICATION_LABEL_PLURAL: "specifications",

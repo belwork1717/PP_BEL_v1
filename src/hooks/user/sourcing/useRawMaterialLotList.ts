@@ -9,9 +9,36 @@ import {
 } from "../../../data/models/user/MaterialsListModel";
 import rawMaterialProcurementController from "../../../controllers/user/sourcing/rawMaterialProcurementController";
 import { OPERATION_STATUS } from "../../operationStatus";
-import { mapLotListApiRow, RawMaterialLotListRequest } from "../../../data/models/user/RawMaterialProcurementModel";
+import {
+  mapLotListApiRow,
+  rawMaterialLotMatchesSearch,
+  type RawMaterialLotListRow,
+  RawMaterialLotListRequest,
+  RAW_MATERIAL_UI_STATUS_TO_API,
+} from "../../../data/models/user/RawMaterialProcurementModel";
 
 const FILTER_ALL = STRINGS.USER_BATCH_LIST.FILTER_ALL;
+/** Fetch up to this many rows when filtering search client-side across all columns */
+const CLIENT_SEARCH_FETCH_LIMIT = 5000;
+
+const buildStatusCountsFromLots = (lots: RawMaterialLotListRow[], totalRecords: number) => {
+  const S = OPERATION_STATUS;
+  const counts: Record<string, number> = {
+    [S.INITIATED]: 0,
+    [S.IN_PROGRESS]: 0,
+    [S.WAITING_FOR_APPROVAL]: 0,
+    [S.APPROVED]: 0,
+    [S.REJECTED]: 0,
+  };
+  lots.forEach((lot) => {
+    const status = lot.rmStatus;
+    if (status in counts) counts[status] += 1;
+  });
+  return {
+    ...counts,
+    [FILTER_ALL]: totalRecords,
+  };
+};
 
 export type SubdeptMaterialOption = {
   materialCode: string;
@@ -49,11 +76,11 @@ const mapLotListStatusCountsForUi = (
   };
 
   const byLabel: Record<string, number> = {
-    [S.INITIATED]: pick("initiated", "Initiated"),
-    [S.IN_PROGRESS]: pick("inProgress", "inProgress", "In Progress"),
-    [S.WAITING_FOR_APPROVAL]: pick("waitingForApproval", "waitingforApproval", "Waiting for Approval"),
-    [S.APPROVED]: pick("approved", "Approved"),
-    [S.REJECTED]: pick("rejected", "Rejected"),
+    [S.INITIATED]: pick("initiated", "Initiated", "INITIATED"),
+    [S.IN_PROGRESS]: pick("inProgress", "inProgress", "In Progress", "IN_PROGRESS"),
+    [S.WAITING_FOR_APPROVAL]: pick("waitingForApproval", "waitingforApproval", "Waiting for Approval", "WAITING_FOR_APPROVAL"),
+    [S.APPROVED]: pick("approved", "Approved", "APPROVED"),
+    [S.REJECTED]: pick("rejected", "Rejected", "REJECTED"),
   };
 
   const sum = Object.values(byLabel).reduce((a, b) => a + b, 0);
@@ -158,18 +185,20 @@ export const useRawMaterialLotList = () => {
     }
     setLoading(true);
     try {
+      const isClientSearch = Boolean(debouncedSearch.trim());
       const payload: RawMaterialLotListRequest = {
         subDepartmentId,
-        page: page + 1,
-        limit: rowsPerPage,
+        page: isClientSearch ? 1 : page + 1,
+        limit: isClientSearch ? CLIENT_SEARCH_FETCH_LIMIT : rowsPerPage,
       };
 
-      if (debouncedSearch.trim()) {
-        payload.search = debouncedSearch.trim();
-      }
-
       if (statusFilter !== FILTER_ALL) {
-        payload.status = [statusFilter];
+        const apiStatus = RAW_MATERIAL_UI_STATUS_TO_API[statusFilter];
+        if (apiStatus) {
+          payload.status = [apiStatus];
+        } else {
+          payload.status = [statusFilter];
+        }
       }
 
       if (advancedFilters.materialCodes.length) {
@@ -197,9 +226,18 @@ export const useRawMaterialLotList = () => {
           pagination?: { totalRecords?: number };
         };
         const lots = (data.lots ?? []).map((lot, idx) => mapLotListApiRow(lot, idx));
-        setBatches(lots);
-        setStatusCounts(mapLotListStatusCountsForUi(data.statusCounts, data.pagination?.totalRecords ?? 0));
-        setTotalRecords(data.pagination?.totalRecords ?? 0);
+
+        if (isClientSearch) {
+          const matched = lots.filter((lot) => rawMaterialLotMatchesSearch(lot, debouncedSearch));
+          const paged = matched.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+          setBatches(paged);
+          setTotalRecords(matched.length);
+          setStatusCounts(buildStatusCountsFromLots(matched, matched.length));
+        } else {
+          setBatches(lots);
+          setStatusCounts(mapLotListStatusCountsForUi(data.statusCounts, data.pagination?.totalRecords ?? 0));
+          setTotalRecords(data.pagination?.totalRecords ?? 0);
+        }
       } else {
         setBatches([]);
         setTotalRecords(0);

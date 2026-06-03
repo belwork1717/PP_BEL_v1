@@ -22,3 +22,7 @@ export const updateRawMaterialProcurementFormApi = async (payload: Record<string
 export const deleteRawMaterialProcurementFormApi = async (payload: { lotId: string }) => {
   return await del(USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS.DELETE_FORM, { data: payload });
 };
+
+export const fetchRawMaterialProcurementStatsApi = async (payload: { subDepartmentId: number }) => {
+  return await post(USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS.STATS, payload);
+};

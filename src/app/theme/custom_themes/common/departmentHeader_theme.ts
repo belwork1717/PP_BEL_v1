@@ -175,6 +175,11 @@ const getDepartmentHeaderTheme = (mode = "light") => {
         completed: d.accentCompleted,
         draft:     d.accentDraft,
         pending:   d.accentPending,
+        createdLots: d.accentAllocated,
+        pendingLots: d.accentPending,
+        waitingForApprovalLots: d.accentDraft,
+        approvedLots: d.accentCompleted,
+        rejectedLots: d.accentPending,
       };
 
       return {

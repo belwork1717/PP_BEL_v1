@@ -3,6 +3,13 @@ import fonts from "../../../fonts";
 
 export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 	const palette = baseTheme?.palette ?? {};
+	const warnBase = palette.warn ?? "#D4AC0D";
+	/** Stronger amber chips — ref range & partial-fill counts (default warn tint was too pale) */
+	const amberChipSx = {
+		background: alpha(warnBase, 0.24),
+		color: "#7D6608",
+		border: `1px solid ${alpha(warnBase, 0.5)}`,
+	};
 
 	return {
 		header: {
@@ -47,9 +54,13 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				height: 22,
 				fontSize: "0.65rem",
 				fontWeight: 700,
-				background: allFilled ? alpha(palette.accent, 0.1) : alpha(palette.warn, 0.1),
-				color: allFilled ? palette.accent : palette.warn,
-				border: `1px solid ${allFilled ? alpha(palette.accent, 0.25) : alpha(palette.warn, 0.3)}`,
+				...(allFilled
+					? {
+							background: alpha(palette.accent, 0.1),
+							color: palette.accent,
+							border: `1px solid ${alpha(palette.accent, 0.25)}`,
+						}
+					: amberChipSx),
 			}),
 			removeIconButton: { color: palette.danger, "&:hover": { background: alpha(palette.danger, 0.08) } },
 			lotField: { minWidth: 0 },
@@ -59,9 +70,7 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				minWidth: 150,
 				fontSize: fonts.size.xs,
 				fontWeight: fonts.weight.bold,
-				background: alpha(palette.warn, 0.1),
-				color: palette.warn,
-				border: `1px solid ${alpha(palette.warn, 0.3)}`,
+				...amberChipSx,
 			},
 			analyzedField: {
 				maxWidth: 160,
@@ -112,8 +121,12 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 			resultSummaryChip: (allFilled: boolean) => ({
 				fontWeight: 700,
 				fontSize: "0.7rem",
-				background: allFilled ? alpha(palette.accent, 0.12) : alpha(palette.warn, 0.12),
-				color: allFilled ? palette.accent : palette.warn,
+				...(allFilled
+					? {
+							background: alpha(palette.accent, 0.12),
+							color: palette.accent,
+						}
+					: amberChipSx),
 			}),
 			materialSelectorBox: {
 				p: "14px 18px",
@@ -248,9 +261,7 @@ export const getRawMaterialProcurementTheme = (baseTheme: any) => {
 				height: 22,
 				fontSize: "0.65rem",
 				fontWeight: 600,
-				background: alpha(palette.warn, 0.1),
-				color: palette.warn,
-				border: `1px solid ${alpha(palette.warn, 0.28)}`,
+				...amberChipSx,
 			},
 			resultText: { fontWeight: 700, color: palette.primary },
 			failedResult: { fontWeight: 700, color: palette.danger },

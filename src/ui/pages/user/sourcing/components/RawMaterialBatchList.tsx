@@ -28,7 +28,10 @@ import UserWorkflowStatusCell from "../../../../components/custom/UserWorkflowSt
 import { useThemeStore } from "../../../../../app/store/themeStore";
 import getSourcingTheme from "../../../../../app/theme/custom_themes/user/sourcing/sourcing_theme";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
-import { canDeleteRawMaterialLot } from "../../../../../data/models/user/RawMaterialProcurementModel";
+import {
+  canDeleteRawMaterialLot,
+  RAW_MATERIAL_LOT_SEARCH_FIELDS,
+} from "../../../../../data/models/user/RawMaterialProcurementModel";
 import { STRINGS } from "../../../../../app/config/strings";
 import type { RawMaterialLotListAdvancedFilters } from "../../../../../hooks/user/sourcing/useRawMaterialLotList";
 
@@ -52,7 +55,10 @@ export const OPERATION_STATUS_CONFIG = getOperationStatusConfig({
   rejected: CancelRoundedIcon,
 });
 
-const STATUS_DROPDOWN_VALUES = [FILTER_ALL, ...Object.values(OPERATION_STATUS)] as const;
+const STATUS_DROPDOWN_VALUES = [
+  FILTER_ALL,
+  ...Object.values(OPERATION_STATUS).filter((status) => status !== OPERATION_STATUS.INITIATED),
+] as const;
 
 /** Lot metadata edit — only for drafts not yet in workflow filling */
 const canShowEditLotButton = (status: string) => status === OPERATION_STATUS.INITIATED;
@@ -123,7 +129,9 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
   const statusConfig = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(OPERATION_STATUS_CONFIG).map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
+        Object.entries(OPERATION_STATUS_CONFIG)
+          .filter(([status]) => status !== OPERATION_STATUS.INITIATED)
+          .map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
       ),
     [theme]
   );
@@ -466,7 +474,7 @@ const RawMaterialBatchList = ({ hookState, rowsPerPageOptions }: any) => {
         statusField="rmStatus"
         statusConfig={statusConfig}
         filters={[]}
-        searchFields={["lotId", "procurementId", "materialCode", "materialName", "manufacturerName", "supplyOrderNo"]}
+        searchFields={[...RAW_MATERIAL_LOT_SEARCH_FIELDS]}
         highlightRow={(row: any) => row.rmStatus === OPERATION_STATUS.REJECTED}
         highlightColor={theme.palette.danger}
         rowsPerPageOptions={rowsPerPageOptions}

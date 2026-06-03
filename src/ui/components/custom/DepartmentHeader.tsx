@@ -14,6 +14,12 @@ type DepartmentHeaderStats = {
   pending: number;
 };
 
+export type DepartmentHeaderStatItem = {
+  key: string;
+  label: string;
+  value: number;
+};
+
 type DepartmentHeaderProps = {
   icon?: ElementType;
   deptName?: string;
@@ -21,6 +27,7 @@ type DepartmentHeaderProps = {
   userName?: string;
   userRole?: string;
   stats?: DepartmentHeaderStats;
+  statItems?: DepartmentHeaderStatItem[];
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,17 +52,21 @@ const DepartmentHeader = ({
   userName    = S.DEFAULT_USER,
   userRole    = S.DEFAULT_ROLE,
   stats       = { allocated: 0, completed: 0, draft: 0, pending: 0 },
+  statItems,
 }: DepartmentHeaderProps) => {
   const mode = useThemeStore((s) => s.mode);
   const t    = getDepartmentHeaderTheme(mode);
   const HeaderIcon = (icon ?? icons.apartment) as typeof icons.apartment;
 
-  const STATS = [
+  const defaultStats: DepartmentHeaderStatItem[] = [
     { key: "allocated", label: S.STAT_ALLOCATED, value: stats.allocated },
     { key: "completed", label: S.STAT_COMPLETED, value: stats.completed },
     { key: "draft",     label: S.STAT_DRAFT,     value: stats.draft     },
     { key: "pending",   label: S.STAT_PENDING,   value: stats.pending   },
   ];
+
+  const displayStats = statItems ?? defaultStats;
+  const statsColumnCount = displayStats.length;
 
   return (
     <Box sx={t.wrapper}>
@@ -109,8 +120,15 @@ const DepartmentHeader = ({
           </Box>
 
           {/* ── RIGHT: Batch stats ── */}
-          <Box sx={t.statsGrid}>
-            {STATS.map(({ key, label, value }) => (
+          <Box sx={{
+            ...t.statsGrid,
+            gridTemplateColumns: {
+              xs: "repeat(2, 1fr)",
+              sm: statsColumnCount <= 4 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
+              md: `repeat(${Math.min(statsColumnCount, 5)}, 1fr)`,
+            },
+          }}>
+            {displayStats.map(({ key, label, value }) => (
               <Box key={key} sx={t.statTile(key)}>
                 <Typography sx={t.statTileValue}>{value}</Typography>
                 <Typography sx={t.statTileLabel}>{label}</Typography>

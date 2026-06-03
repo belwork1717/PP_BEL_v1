@@ -1,4 +1,4 @@
-export type MaterialsListMaterialType = "SOLID" | "LIQUID";
+export type MaterialsListMaterialType = "SOLID" | "LIQUID" | "BOTH";
 
 export type MaterialsListRequest = {
   materialType: MaterialsListMaterialType;

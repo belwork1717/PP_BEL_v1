@@ -42,7 +42,10 @@ export const OPERATION_STATUS_CONFIG = getOperationStatusConfig({
   rejected: CancelRoundedIcon,
 });
 
-const STATUS_DROPDOWN_VALUES = [FILTER_ALL, ...Object.values(OPERATION_STATUS)] as const;
+const STATUS_DROPDOWN_VALUES = [
+  FILTER_ALL,
+  ...Object.values(OPERATION_STATUS).filter((status) => status !== OPERATION_STATUS.INITIATED),
+] as const;
 
 const canViewCasingDetails = (status: string) =>
   status === OPERATION_STATUS.WAITING_FOR_APPROVAL || status === OPERATION_STATUS.APPROVED;
@@ -114,7 +117,9 @@ const RocketMotorBatchList = ({ hookState, rowsPerPageOptions }: any) => {
   const statusConfig = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(OPERATION_STATUS_CONFIG).map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
+        Object.entries(OPERATION_STATUS_CONFIG)
+          .filter(([status]) => status !== OPERATION_STATUS.INITIATED)
+          .map(([status, cfg]) => [status, { ...cfg, ...theme.batchList.statusConfig[status] }])
       ),
     [theme]
   );

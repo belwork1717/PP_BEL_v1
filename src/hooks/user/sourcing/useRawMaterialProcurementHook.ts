@@ -11,12 +11,12 @@ import {
   canDeleteRawMaterialLot,
   mapFirstBlockToLotUpdatePayload,
   MaterialBlock,
+  normalizeRawMaterialLotListStatus,
   serializeMaterialBlocks,
   RawMaterialFormBatch,
   RawMaterialLotDetailsModel,
   RawMaterialLotDetailsContext,
   RawMaterialLotListRow,
-  SourcingStatus,
   SOURCING_STATUS,
 } from "../../../data/models/user/RawMaterialProcurementModel";
 import { useRawMaterialLotList } from "./useRawMaterialLotList";
@@ -132,7 +132,7 @@ export const useRawMaterialProcurementHook = () => {
               formId: detailsResponse.data.formId ?? prev.formId,
               lotId: id,
               batchId: id,
-              rmStatus: (wf?.currentStatus || prev.rmStatus) as SourcingStatus,
+              rmStatus: normalizeRawMaterialLotListStatus(wf?.currentStatus || prev.rmStatus),
               rejectionReason: wf?.rejectionReason ?? null,
             }
           : prev
@@ -169,7 +169,7 @@ export const useRawMaterialProcurementHook = () => {
       const wf = detailsResponse.data.workflowInsights;
       const batch = lotListRowToFormBatch(row, blocks);
       batch.rejectionReason = wf?.rejectionReason ?? null;
-      batch.rmStatus = (wf?.currentStatus || row.rmStatus) as SourcingStatus;
+      batch.rmStatus = normalizeRawMaterialLotListStatus(wf?.currentStatus || row.rmStatus);
       setActiveBatch(batch);
     } else if (detailsResponse?.statusCode === 404) {
       blocks = [
@@ -261,7 +261,7 @@ export const useRawMaterialProcurementHook = () => {
         supplyOrderNo: model.supplyOrderNo || row.supplyOrderNo,
         receiptDate: model.receiptDate || row.receiptDate,
         manufacturerName: model.manufacturerName || row.manufacturerName,
-        rmStatus: (wf?.currentStatus || row.rmStatus) as string,
+        rmStatus: normalizeRawMaterialLotListStatus(wf?.currentStatus || row.rmStatus),
         createdBy: row.createdBy,
         createdOn: row.createdOn,
         rejectionReason: wf?.rejectionReason ?? null,
@@ -411,7 +411,7 @@ export const useRawMaterialProcurementHook = () => {
                 ...prev,
                 procurementId: response.data?.procurementId ?? prev.procurementId,
                 batchId: response.data?.procurementId || prev.batchId,
-                rmStatus: (response.data?.status as typeof prev.rmStatus) || prev.rmStatus,
+                rmStatus: normalizeRawMaterialLotListStatus(response.data?.status || prev.rmStatus),
               }
             : prev
         );
@@ -478,7 +478,7 @@ export const useRawMaterialProcurementHook = () => {
                 formId: response.data?.formId ?? prev.formId,
                 lotId: resolvedLotId,
                 batchId: resolvedLotId,
-                rmStatus: (response.data?.status as typeof prev.rmStatus) || prev.rmStatus,
+                rmStatus: normalizeRawMaterialLotListStatus(response.data?.status || prev.rmStatus),
               }
             : prev
         );

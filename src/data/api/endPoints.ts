@@ -209,6 +209,7 @@ export const USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS = {
   FORM_DETAILS: `${API_BASE}/user/raw-material-procurement/form/details`,
   UPDATE_FORM: `${API_BASE}/user/raw-material-procurement/form/update`,
   DELETE_FORM: `${API_BASE}/user/raw-material-procurement/form/delete`,
+  STATS: `${API_BASE}/user/raw-material-procurement/stats`,
 };
 
 export const USER_ROCKET_MOTOR_CASING_ENDPOINTS = {
@@ -217,6 +218,7 @@ export const USER_ROCKET_MOTOR_CASING_ENDPOINTS = {
   UPDATE_FORM: `${API_BASE}/user/rocket-motor-casing/form/update`,
   DELETE_FORM: `${API_BASE}/user/rocket-motor-casing/form/delete`,
   CASING_LIST: `${API_BASE}/user/subdepartment/rocket-motor-casing/list`,
+  STATS: `${API_BASE}/user/rocket-motor-casing/stats`,
 };
 
 export const USER_RAW_MATERIAL_PREPARATION_ENDPOINTS = {

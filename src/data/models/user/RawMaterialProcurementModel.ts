@@ -1,8 +1,38 @@
-import { OPERATION_STATUS } from "../../../hooks/operationStatus";
+import { OPERATION_STATUS, type OperationStatus } from "../../../hooks/operationStatus";
 
 /** Re-export for sourcing pages that previously imported from sourcingWorkflowData */
 export const SOURCING_STATUS = OPERATION_STATUS;
 export type SourcingStatus = (typeof OPERATION_STATUS)[keyof typeof OPERATION_STATUS];
+
+const OPERATION_STATUS_VALUES = Object.values(OPERATION_STATUS) as OperationStatus[];
+
+/** API status enum → UI status labels */
+export function normalizeRawMaterialLotListStatus(status: string): OperationStatus {
+  const u = String(status ?? "").toUpperCase();
+  const map: Record<string, OperationStatus> = {
+    INITIATED: OPERATION_STATUS.INITIATED,
+    IN_PROGRESS: OPERATION_STATUS.IN_PROGRESS,
+    WAITING_FOR_APPROVAL: OPERATION_STATUS.WAITING_FOR_APPROVAL,
+    APPROVED: OPERATION_STATUS.APPROVED,
+    REJECTED: OPERATION_STATUS.REJECTED,
+  };
+  const fromApiKey = map[u];
+  if (fromApiKey) return fromApiKey;
+  const trimmed = String(status ?? "").trim();
+  if (OPERATION_STATUS_VALUES.includes(trimmed as OperationStatus)) {
+    return trimmed as OperationStatus;
+  }
+  return OPERATION_STATUS.INITIATED;
+}
+
+/** UI status labels → API status enum for list filters */
+export const RAW_MATERIAL_UI_STATUS_TO_API: Record<string, string> = {
+  [OPERATION_STATUS.INITIATED]: "INITIATED",
+  [OPERATION_STATUS.IN_PROGRESS]: "IN_PROGRESS",
+  [OPERATION_STATUS.WAITING_FOR_APPROVAL]: "WAITING_FOR_APPROVAL",
+  [OPERATION_STATUS.APPROVED]: "APPROVED",
+  [OPERATION_STATUS.REJECTED]: "REJECTED",
+};
 
 /** Soft-delete is allowed only while the lot is still in progress */
 export const canDeleteRawMaterialLot = (status: string | null | undefined) =>
@@ -115,6 +145,18 @@ export function isSpecRowFailed(row: Pick<SpecRow, "status" | "isOutOfRange">): 
   return Boolean(row.isOutOfRange);
 }
 
+/** UI label for specification row status (API may return "failed" for out-of-range values). */
+export function formatSpecStatusDisplayLabel(
+  status: string | null | undefined,
+  isOutOfRange?: boolean
+): string | null {
+  if (isOutOfRange || String(status ?? "").trim().toLowerCase() === "failed") {
+    return "Out of Range";
+  }
+  const trimmed = String(status ?? "").trim();
+  return trimmed || null;
+}
+
 export type MaterialBlock = {
   material: string;
   lotNo: string;
@@ -204,6 +246,55 @@ export function groupBlocksToMaterialGroups(blocks: MaterialBlock[]): MaterialFo
       })),
     };
   });
+}
+
+/** Column keys searched by the raw material lot list search bar */
+export const RAW_MATERIAL_LOT_SEARCH_FIELDS = [
+  "lotId",
+  "procurementId",
+  "materialCode",
+  "materialName",
+  "supplyOrderNo",
+  "receiptDate",
+  "manufacturerName",
+  "createdBy.fullName",
+  "createdBy.id",
+  "rmStatus",
+  "status",
+  "createdOn",
+] as const;
+
+/** Match lot list row against free-text search across all visible table columns */
+export function rawMaterialLotMatchesSearch(row: RawMaterialLotListRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const parts: string[] = [
+    row.lotId,
+    row.procurementId,
+    row.materialCode,
+    row.materialName,
+    row.supplyOrderNo,
+    row.receiptDate,
+    row.manufacturerName,
+    row.rmStatus,
+    row.status,
+    row.createdBy?.fullName ?? "",
+    row.createdBy?.id ?? "",
+  ];
+
+  if (row.createdOn) {
+    parts.push(row.createdOn);
+    const d = new Date(row.createdOn);
+    if (!Number.isNaN(d.getTime())) {
+      parts.push(
+        d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+        d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
+      );
+    }
+  }
+
+  return parts.some((part) => String(part).toLowerCase().includes(q));
 }
 
 /** List row from POST …/lot-list */
@@ -496,7 +587,8 @@ export class RawMaterialLotDetailsModel {
 export function mapLotListApiRow(lot: any, index: number): RawMaterialLotListRow {
   const lotId = String(lot?.lotId ?? "");
   const id = lotId ? simpleHash(lotId) : index;
-  const status = String(lot?.status ?? "");
+  const statusRaw = String(lot?.status ?? "");
+  const rmStatus = normalizeRawMaterialLotListStatus(statusRaw);
   return {
     id,
     lotId,
@@ -506,8 +598,8 @@ export function mapLotListApiRow(lot: any, index: number): RawMaterialLotListRow
     supplyOrderNo: String(lot?.supplyOrderNo ?? ""),
     receiptDate: String(lot?.receiptDate ?? ""),
     manufacturerName: String(lot?.manufacturerName ?? ""),
-    status,
-    rmStatus: status,
+    status: statusRaw,
+    rmStatus,
     createdBy: lot?.createdBy ?? null,
     createdOn: String(lot?.createdOn ?? ""),
     formId: lot?.formId ?? null,

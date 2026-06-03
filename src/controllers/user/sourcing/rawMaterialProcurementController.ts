@@ -15,7 +15,11 @@ import {
   fetchRawMaterialLotListApi,
   fetchRawMaterialProcurementFormDetailsApi,
   updateRawMaterialProcurementFormApi,
+  fetchRawMaterialProcurementStatsApi,
 } from "../../../data/api/users/sourcing/rawMaterialProcurementApi";
+import {
+  RawMaterialProcurementStatsModel,
+} from "../../../data/models/user/RawMaterialProcurementStatsModel";
 
 export type RawMaterialDetailsPayload = {
   formId: string;
@@ -92,6 +96,18 @@ export const rawMaterialProcurementController = {
       return new ApiResponseModel<RawMaterialLotDeleteResponse>(response);
     } catch (error) {
       console.error("Failed to delete raw material lot:", error);
+      return new ApiResponseModel(error);
+    }
+  },
+
+  fetchStats: async (subDepartmentId: number) => {
+    try {
+      const response = await fetchRawMaterialProcurementStatsApi({ subDepartmentId });
+      return new ApiResponseModel(response, (res) =>
+        RawMaterialProcurementStatsModel.fromApi(res?.data)
+      );
+    } catch (error) {
+      console.error("Failed to fetch raw material procurement stats:", error);
       return new ApiResponseModel(error);
     }
   },

@@ -22,7 +22,11 @@ import getSourcingTheme from "../../../../../app/theme/custom_themes/user/sourci
 import { STRINGS } from "../../../../../app/config/strings";
 import { getOperationStatusConfig, OPERATION_STATUS } from "../../../../../hooks/operationStatus";
 import UserWorkflowStatusCell from "../../../../components/custom/UserWorkflowStatusCell";
-import type { MaterialBlock, RawMaterialLotDetailsContext } from "../../../../../data/models/user/RawMaterialProcurementModel";
+import {
+  formatSpecStatusDisplayLabel,
+  type MaterialBlock,
+  type RawMaterialLotDetailsContext,
+} from "../../../../../data/models/user/RawMaterialProcurementModel";
 import { fileUtils } from "../../../../../utils/FileUtils";
 
 const BL = STRINGS.SOURCING.BATCH_LIST;
@@ -175,6 +179,7 @@ const RawMaterialLotDetailsView = ({ row, blocks, loading, onBack }: RawMaterial
                       <TableBody>
                         {block.rows.map((specRow, ri) => {
                           const failed = Boolean(specRow.isOutOfRange);
+                          const statusLabel = formatSpecStatusDisplayLabel(specRow.status, specRow.isOutOfRange);
                           return (
                             <TableRow key={`${specRow.specificationCode ?? ri}`} sx={rmTheme.tableRow(ri, failed)}>
                               <TableCell sx={{ ...rmTheme.tableCell, ...rmTheme.specText }}>
@@ -192,9 +197,9 @@ const RawMaterialLotDetailsView = ({ row, blocks, loading, onBack }: RawMaterial
                                 <Typography sx={rmTheme.remarksText}>{specRow.remarks || "—"}</Typography>
                               </TableCell>
                               <TableCell sx={rmTheme.tableCell}>
-                                {specRow.status ? (
+                                {statusLabel ? (
                                   <Chip
-                                    label={specRow.status}
+                                    label={statusLabel}
                                     size="small"
                                     sx={{
                                       height: 20,

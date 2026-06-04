@@ -828,16 +828,8 @@ export function validateCasingFormStep(form: RocketMotorCasingFormData, step: nu
     case 0:
       return validateIdentification(form);
     case 1:
-      return null;
     case 2:
-      if (!form.weightWithoutHarness.trim() || !form.weightWithHarness.trim()) {
-        return "Weighment values are required.";
-      }
-      return null;
     case 3:
-      if (form.dimensionalData.length === 0) {
-        return "Dimensional inspection parameters are required for the selected motor stage.";
-      }
       return null;
     case 4:
       return null;

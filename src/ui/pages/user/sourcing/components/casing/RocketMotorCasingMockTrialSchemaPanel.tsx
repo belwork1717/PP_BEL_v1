@@ -120,6 +120,7 @@ const RocketMotorCasingMockTrialSchemaPanel = ({
         loading={loading || slot.schemaLoading}
         error={error ?? slot.schemaError}
         themeTokens={schemaThemeTokens}
+        apiContext={{ subDepartmentId }}
       />
     </Box>
   );

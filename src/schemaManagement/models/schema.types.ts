@@ -14,6 +14,11 @@ export type SchemaFieldDataSource = {
   requestBody?: Record<string, unknown>;
 };
 
+/** Runtime values injected into schema API dropdown requests (e.g. subdepartmentId). */
+export type SchemaApiContext = {
+  subDepartmentId?: number;
+};
+
 export type SchemaField = {
   key: string;
   label: string;
@@ -39,6 +44,7 @@ export type SchemaColumn = {
   type: SchemaFieldType;
   readonly?: boolean;
   unit?: string;
+  width?: string;
   measurementConfig?: { valueType?: string; unit?: string };
   formula?: { expression?: string; unit?: string };
 };

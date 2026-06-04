@@ -1,5 +1,5 @@
 import { Box, Stack, Typography, alpha } from "@mui/material";
-import type { SchemaDocument, SchemaFormValues, SchemaThemeTokens } from "../models/schema.types";
+import type { SchemaApiContext, SchemaDocument, SchemaFormValues, SchemaThemeTokens } from "../models/schema.types";
 import DynamicGroupSection from "./sections/DynamicGroupSection";
 import FormSection from "./sections/FormSection";
 import NestedGroupSection from "./sections/NestedGroupSection";
@@ -11,6 +11,7 @@ type SchemaFormRendererProps = {
   onChange: (values: SchemaFormValues) => void;
   readOnly?: boolean;
   theme: SchemaThemeTokens;
+  apiContext?: SchemaApiContext;
 };
 
 const hasNestedGroup = (section: SchemaDocument["sections"][number]) =>
@@ -22,6 +23,7 @@ const SchemaFormRenderer = ({
   onChange,
   readOnly = false,
   theme,
+  apiContext,
 }: SchemaFormRendererProps) => {
   const updateSectionRows = (sectionId: string, rows: Record<string, unknown>[]) => {
     onChange({ ...values, [sectionId]: rows });
@@ -82,6 +84,7 @@ const SchemaFormRenderer = ({
                 onRowsChange={(rows) => updateSectionRows(section.sectionId, rows)}
                 readOnly={readOnly}
                 theme={theme}
+                apiContext={apiContext}
               />
             )}
 
@@ -92,6 +95,7 @@ const SchemaFormRenderer = ({
                 onRowChange={(row) => updateFormSection(section.sectionId, row)}
                 readOnly={readOnly}
                 theme={theme}
+                apiContext={apiContext}
               />
             )}
 
@@ -102,6 +106,7 @@ const SchemaFormRenderer = ({
                 onRowsChange={(rows) => updateSectionRows(section.sectionId, rows)}
                 readOnly={readOnly}
                 theme={theme}
+                apiContext={apiContext}
               />
             )}
 

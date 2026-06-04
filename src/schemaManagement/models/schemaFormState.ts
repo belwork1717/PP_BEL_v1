@@ -4,6 +4,8 @@ import type {
   SchemaSection,
   SchemaSectionSubmission,
 } from "./schema.types";
+import { applyFormulaColumns } from "../utils/formulaEval";
+import { getAllTableColumns } from "../utils/schemaTableColumns";
 
 export const cloneSchemaRow = (row: Record<string, unknown>) => {
   try {
@@ -52,6 +54,13 @@ export const buildInitialSectionValues = (sections: SchemaSection[]): SchemaForm
 
     if (section.defaultRows?.length) {
       values[section.sectionId] = section.defaultRows.map((row) => cloneSchemaRow(row as Record<string, unknown>));
+      return;
+    }
+
+    if (section.type === "table" || section.type === "complex-table") {
+      const columns = getAllTableColumns(section);
+      const emptyRow = applyFormulaColumns({ srNo: 1 }, columns);
+      values[section.sectionId] = section.addRowAllowed === false ? [] : [emptyRow];
       return;
     }
 

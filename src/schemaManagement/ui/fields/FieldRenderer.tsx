@@ -1,5 +1,5 @@
 import { Box, MenuItem, TextField, Typography } from "@mui/material";
-import type { SchemaField, SchemaThemeTokens } from "../../models/schema.types";
+import type { SchemaApiContext, SchemaField, SchemaThemeTokens } from "../../models/schema.types";
 import { buildInputSx } from "../theme";
 import SchemaApiDropdownField from "./SchemaApiDropdownField";
 
@@ -9,9 +9,17 @@ type FieldRendererProps = {
   onChange: (value: string) => void;
   readOnly?: boolean;
   theme: SchemaThemeTokens;
+  apiContext?: SchemaApiContext;
 };
 
-const FieldRenderer = ({ field, value, onChange, readOnly = false, theme }: FieldRendererProps) => {
+const FieldRenderer = ({
+  field,
+  value,
+  onChange,
+  readOnly = false,
+  theme,
+  apiContext,
+}: FieldRendererProps) => {
   const fieldLabel = field.unit ? `${field.label} (${field.unit})` : field.label;
   const isWideLabel = fieldLabel.length > 22;
   const disabled = readOnly || field.readonly;
@@ -32,6 +40,7 @@ const FieldRenderer = ({ field, value, onChange, readOnly = false, theme }: Fiel
         onChange={onChange}
         readOnly={readOnly}
         theme={theme}
+        apiContext={apiContext}
       />
     );
   }

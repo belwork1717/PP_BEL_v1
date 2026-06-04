@@ -15,6 +15,8 @@ type CasingFormStepNavProps = {
   isLastStep: boolean;
   stepError: string | null;
   nextDisabledHint?: string | null;
+  canNavigateToStep: (stepIndex: number) => boolean;
+  onStepClick: (stepIndex: number) => void;
   onBack: () => void;
   onNext: () => void;
   theme: any;
@@ -30,6 +32,8 @@ const CasingFormStepNav = ({
   isLastStep,
   stepError,
   nextDisabledHint = null,
+  canNavigateToStep,
+  onStepClick,
   onBack,
   onNext,
   theme,
@@ -42,14 +46,19 @@ const CasingFormStepNav = ({
           {S.STEP_OF.replace("{current}", String(currentStep + 1)).replace("{total}", String(totalSteps))}
         </Typography>
         <Stack direction="row" gap={0.75} flexWrap="wrap" mt={0.75}>
-          {stepLabels.map((label, idx) => (
-            <Chip
-              key={label}
-              label={label}
-              size="small"
-              sx={cf.stepNav.stepChip(idx === currentStep, idx < currentStep, theme)}
-            />
-          ))}
+          {stepLabels.map((label, idx) => {
+            const navigable = canNavigateToStep(idx);
+            return (
+              <Chip
+                key={label}
+                label={label}
+                size="small"
+                clickable={navigable}
+                onClick={navigable ? () => onStepClick(idx) : undefined}
+                sx={cf.stepNav.stepChip(idx === currentStep, idx < currentStep, theme, navigable)}
+              />
+            );
+          })}
         </Stack>
       </Box>
 

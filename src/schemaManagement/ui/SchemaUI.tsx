@@ -1,5 +1,5 @@
 import { Alert, Box, CircularProgress, Typography } from "@mui/material";
-import type { SchemaDocument, SchemaFormValues, SchemaThemeTokens } from "../models/schema.types";
+import type { SchemaApiContext, SchemaDocument, SchemaFormValues, SchemaThemeTokens } from "../models/schema.types";
 import SchemaFormRenderer from "./SchemaFormRenderer";
 import { resolveTheme } from "./theme";
 
@@ -11,6 +11,7 @@ export type SchemaUIProps = {
   loading?: boolean;
   error?: string | null;
   themeTokens?: Partial<SchemaThemeTokens>;
+  apiContext?: SchemaApiContext;
 };
 
 const SchemaUI = ({
@@ -21,6 +22,7 @@ const SchemaUI = ({
   loading = false,
   error = null,
   themeTokens,
+  apiContext,
 }: SchemaUIProps) => {
   const theme = resolveTheme(themeTokens);
 
@@ -55,6 +57,7 @@ const SchemaUI = ({
       onChange={onChange}
       readOnly={readOnly}
       theme={theme}
+      apiContext={apiContext}
     />
   );
 };

@@ -235,7 +235,7 @@ export const getRocketMotorCasingTheme = (baseTheme: any) => {
 					textTransform: "uppercase",
 					color: palette.textSub,
 				},
-				stepChip: (active: boolean, done: boolean, theme: any) => ({
+				stepChip: (active: boolean, done: boolean, theme: any, navigable = false) => ({
 					height: 24,
 					fontSize: "0.65rem",
 					fontWeight: 700,
@@ -254,6 +254,17 @@ export const getRocketMotorCasingTheme = (baseTheme: any) => {
 									background: alpha(theme.palette.textSub, 0.06),
 									color: palette.textSub,
 								}),
+					...(navigable && !active
+						? {
+								cursor: "pointer",
+								"&:hover": {
+									background: alpha(palette.primaryLight ?? "#2E86C1", 0.14),
+									color: palette.primary ?? "#1B4F72",
+								},
+							}
+						: navigable
+							? { cursor: "pointer" }
+							: { cursor: "default", opacity: 0.55 }),
 				}),
 				backButton: (theme: any) => ({
 					borderRadius: 2,

@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Box, CircularProgress, MenuItem, TextField, Typography } from "@mui/material";
-import { post } from "../../../data/api/httpClient";
-import type { SchemaField, SchemaThemeTokens } from "../../models/schema.types";
+import type { SchemaApiContext, SchemaField, SchemaThemeTokens } from "../../models/schema.types";
+import {
+  fetchSchemaApiOptions,
+  resolveSchemaOptionKeys,
+} from "../../utils/schemaApiDataSource";
 import { buildInputSx } from "../theme";
 
 type SchemaApiDropdownFieldProps = {
@@ -10,6 +13,7 @@ type SchemaApiDropdownFieldProps = {
   onChange: (value: string) => void;
   readOnly?: boolean;
   theme: SchemaThemeTokens;
+  apiContext?: SchemaApiContext;
 };
 
 const SchemaApiDropdownField = ({
@@ -18,20 +22,34 @@ const SchemaApiDropdownField = ({
   onChange,
   readOnly = false,
   theme,
+  apiContext,
 }: SchemaApiDropdownFieldProps) => {
   const [options, setOptions] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const displayKey = field.displayKey ?? "label";
-  const valueKey = field.valueKey ?? "value";
   const fieldLabel = field.unit ? `${field.label} (${field.unit})` : field.label;
   const stringValue = String(value ?? "");
+
+  const requestKey = useMemo(
+    () =>
+      JSON.stringify({
+        dataSource: field.dataSource,
+        subDepartmentId: apiContext?.subDepartmentId ?? null,
+      }),
+    [field.dataSource, apiContext?.subDepartmentId]
+  );
+
+  const { displayKey, valueKey } = useMemo(
+    () => resolveSchemaOptionKeys(field.displayKey, field.valueKey, options),
+    [field.displayKey, field.valueKey, options]
+  );
 
   useEffect(() => {
     const ds = field.dataSource;
     if (ds?.type !== "api" || !ds.api) {
       setOptions([]);
+      setError(null);
       return;
     }
 
@@ -39,14 +57,11 @@ const SchemaApiDropdownField = ({
     setLoading(true);
     setError(null);
 
-    const endpoint = ds.api.startsWith("/") ? ds.api : `/${ds.api}`;
-
-    void post(endpoint, ds.requestBody ?? {})
-      .then((res: unknown) => {
+    void fetchSchemaApiOptions(ds, apiContext)
+      .then(({ options: list, error: fetchError }) => {
         if (cancelled) return;
-        const root = res as Record<string, unknown>;
-        const list = Array.isArray(root?.data) ? root.data : Array.isArray(res) ? res : [];
-        setOptions(list as Record<string, unknown>[]);
+        setOptions(list);
+        setError(fetchError);
       })
       .catch(() => {
         if (!cancelled) setError("Unable to load options.");
@@ -58,7 +73,7 @@ const SchemaApiDropdownField = ({
     return () => {
       cancelled = true;
     };
-  }, [field.dataSource, JSON.stringify(field.dataSource?.requestBody ?? {})]);
+  }, [field.dataSource, requestKey, apiContext]);
 
   return (
     <Box sx={{ minWidth: 240, flex: "1 1 240px", maxWidth: 320 }}>

@@ -44,19 +44,12 @@ const normalizeField = (field: SchemaField): SchemaField => {
   return field;
 };
 
-const flattenSectionColumns = (section: SchemaSection): SchemaSection["columns"] => {
-  const base = section.columns ?? [];
-  const grouped =
-    section.groupedColumns?.flatMap((group) => group.columns ?? []) ?? [];
-  return [...base, ...grouped];
-};
-
 const normalizeSection = (section: SchemaSection): SchemaSection => {
-  const sectionType = section.type === "complex-table" ? "table" : section.type;
   return {
     ...section,
-    type: sectionType,
-    columns: flattenSectionColumns(section),
+    type: section.type === "complex-table" ? "complex-table" : section.type,
+    columns: section.columns ?? [],
+    groupedColumns: section.groupedColumns,
     defaultRows: section.defaultRows?.map((row) => normalizeDefaultRow(row as Record<string, unknown>)),
     fields: section.fields?.map(normalizeField),
     lots: section.lots
@@ -82,7 +75,9 @@ export const normalizeSchemaDocument = (payload: unknown): SchemaDocument | null
   const details = (outerData.rawMaterialDetails ??
     innerData.rawMaterialDetails) as SchemaDocument["rawMaterialDetails"] | undefined;
   const sections = resolveSchemaSections(outerData, innerData);
-  const schemaType = String(root.schemaType ?? outerData.schemaType ?? "RAW_MATERIALS");
+  const schemaType = String(
+    root.schemaType ?? outerData.schemaType ?? innerData.schemaType ?? "RAW_MATERIALS"
+  );
   const isMockTrial = schemaType === "MOCK_TRIAL";
   const formDetails = (outerData.formDetails ?? innerData.formDetails) as
     | { title?: string; description?: string }
@@ -116,10 +111,13 @@ export const normalizeSchemaDocument = (payload: unknown): SchemaDocument | null
       };
 
   return {
-    schemaVersion: String(root.schemaVersion ?? outerData.schemaVersion ?? "1.0"),
+    schemaVersion: String(root.schemaVersion ?? outerData.schemaVersion ?? innerData.schemaVersion ?? "1.0"),
     schemaType,
-    functionality: String(root.functionality ?? outerData.functionality ?? ""),
-    layout: (innerData.layout as { type: string }) ?? { type: "flat" },
+    functionality: String(root.functionality ?? outerData.functionality ?? innerData.functionality ?? ""),
+    layout:
+      (innerData.layout as { type: string }) ??
+      (outerData.layout as { type: string }) ??
+      { type: "flat" },
     formDetails: formDetails
       ? {
           title: String(formDetails.title ?? "").trim() || undefined,

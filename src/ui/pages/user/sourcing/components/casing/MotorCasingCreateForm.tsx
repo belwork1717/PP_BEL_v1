@@ -193,6 +193,16 @@ const MotorCasingCreateForm = ({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const canNavigateToStep = (targetStep: number) =>
+    targetStep === 0 || identificationComplete;
+
+  const handleStepClick = (targetStep: number) => {
+    if (!canNavigateToStep(targetStep)) return;
+    setStepError(null);
+    setStep(targetStep);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   useEffect(() => {
     setStepError(null);
   }, [form]);
@@ -813,6 +823,8 @@ const MotorCasingCreateForm = ({
         isLastStep={isLastStep}
         stepError={stepError}
         nextDisabledHint={!canAdvanceFromStep && !isLastStep ? S.IDENTIFICATION_GATE_HINT : null}
+        canNavigateToStep={canNavigateToStep}
+        onStepClick={handleStepClick}
         onBack={handleStepBack}
         onNext={handleStepNext}
         theme={theme}

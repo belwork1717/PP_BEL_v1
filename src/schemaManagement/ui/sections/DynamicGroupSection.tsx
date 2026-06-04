@@ -1,5 +1,5 @@
 import { Box, Button, Stack } from "@mui/material";
-import type { SchemaSection, SchemaThemeTokens } from "../../models/schema.types";
+import type { SchemaApiContext, SchemaSection, SchemaThemeTokens } from "../../models/schema.types";
 import FieldRenderer from "../fields/FieldRenderer";
 
 type DynamicGroupSectionProps = {
@@ -8,6 +8,7 @@ type DynamicGroupSectionProps = {
   onRowsChange: (rows: Record<string, unknown>[]) => void;
   readOnly?: boolean;
   theme: SchemaThemeTokens;
+  apiContext?: SchemaApiContext;
 };
 
 const DynamicGroupSection = ({
@@ -16,6 +17,7 @@ const DynamicGroupSection = ({
   onRowsChange,
   readOnly = false,
   theme,
+  apiContext,
 }: DynamicGroupSectionProps) => {
   const updateRowField = (rowIdx: number, key: string, value: string) => {
     const next = rows.map((row, idx) =>
@@ -47,6 +49,7 @@ const DynamicGroupSection = ({
               value={(row as Record<string, unknown>)[field.key]}
               readOnly={readOnly}
               theme={theme}
+              apiContext={apiContext}
               onChange={(value) => updateRowField(rowIdx, field.key, value)}
             />
           ))}

@@ -1,5 +1,5 @@
 import { Box, Button, Divider, Stack, Typography } from "@mui/material";
-import type { SchemaField, SchemaSection, SchemaThemeTokens } from "../../models/schema.types";
+import type { SchemaApiContext, SchemaField, SchemaSection, SchemaThemeTokens } from "../../models/schema.types";
 import { buildNestedFieldDefaults } from "../../models/schemaFormState";
 import FieldRenderer from "../fields/FieldRenderer";
 import NestedTableField from "../fields/NestedTableField";
@@ -16,6 +16,7 @@ type NestedGroupSectionProps = {
   onRowsChange: (rows: Record<string, unknown>[]) => void;
   readOnly?: boolean;
   theme: SchemaThemeTokens;
+  apiContext?: SchemaApiContext;
 };
 
 const NestedGroupSection = ({
@@ -24,6 +25,7 @@ const NestedGroupSection = ({
   onRowsChange,
   readOnly = false,
   theme,
+  apiContext,
 }: NestedGroupSectionProps) => {
   const nestedFields = getNestedFields(section);
   if (!nestedFields) return null;
@@ -76,6 +78,7 @@ const NestedGroupSection = ({
         value={row[field.key]}
         readOnly={readOnly}
         theme={theme}
+        apiContext={apiContext}
         onChange={(value) => updateRow(rowIdx, field.key, value)}
       />
     );

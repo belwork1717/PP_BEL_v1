@@ -202,6 +202,7 @@ export const USER_OPERATIONS_ENDPOINTS = {
   SOLID_PROCESSES_LIST: `${API_BASE}/user/subdepartment/solid/processes-list`,
   MOTORS_STAGE_LIST: `${API_BASE}/user/subdepartment/motors-stage-list`,
   APPROVED_MOTORS_LIST: `${API_BASE}/user/subdepartment/approved-motors-list`,
+  CASTING_STATION_LIST: `${API_BASE}/user/subdepartment/casting-station`,
 };
 
 export const USER_RAW_MATERIAL_PROCUREMENT_ENDPOINTS = {

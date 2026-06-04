@@ -32,3 +32,7 @@ export const fetchApprovedMotorsListApi = async (payload: {
 }) => {
   return await post(USER_OPERATIONS_ENDPOINTS.APPROVED_MOTORS_LIST, payload);
 };
+
+export const fetchCastingStationsApi = async () => {
+  return await get(USER_OPERATIONS_ENDPOINTS.CASTING_STATION_LIST);
+};
